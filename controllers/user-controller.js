@@ -96,8 +96,8 @@ const UserController = {
     }
   },
   updateUser: async (req, res) => {
-    const { id } = req.parans;
-    const { email, name, dateOfBith, bio, location } = req.body;
+    const { id } = req.params;
+    const { email, name, dateOfBirth, bio, location } = req.body;
 
     let filePath;
 
@@ -105,15 +105,18 @@ const UserController = {
       filePath = req.file.path;
     }
 
+    // Проверка, что пользователь обновляет свою информацию
     if (id !== req.user.userId) {
       return res.status(403).json({ error: "Недостаточно прав" });
     }
 
     try {
       if (email) {
-        const existingUser = await prisma.user.findFirst({ where: { email } });
+        const existingUser = await prisma.user.findFirst({
+          where: { email: email },
+        });
 
-        if (existingUser && existingUser.id !== id) {
+        if (existingUser && existingUser.id !== parseInt(id)) {
           return res
             .status(400)
             .json({ error: "Пользователь с таким email уже существует" });
@@ -126,13 +129,11 @@ const UserController = {
           email: email || undefined,
           name: name || undefined,
           avatarUrl: filePath ? `/${filePath}` : undefined,
-          dateOfBirth: dateOfBith || undefined,
+          dateOfBirth: dateOfBirth || undefined,
           bio: bio || undefined,
           location: location || undefined,
         },
-        include: { avatarUrl: true },
       });
-
       res.json(user);
     } catch (error) {
       console.error("Error in updateUser:", error);
