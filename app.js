@@ -19,7 +19,7 @@ app.use("/api", require("./routes"));
 
 if (!fs.existsSync("uploads")) {
   fs.mkdirSync("uploads");
-} //проверка нахождения папки, если нет то создание
+} //проверка нахождения папки, если нет то ее создание
 
 // catch 404 and forward to error handler
 app.use(function (req, res, next) {
