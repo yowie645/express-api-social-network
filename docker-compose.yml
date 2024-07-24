@@ -1,0 +1,18 @@
+version: "3"
+services:
+  express-app:
+    build: .
+    ports:
+      - "3000:3000"
+    depends_on:
+      - mongodb
+    environment:
+      DATABASE_URL: "mongodb://minxrka:minxrka@mongodb:27017/mydatabase?authSource=admin&directConnection=true"
+
+  mongodb:
+    image: prismagraphql/mongo-single-replica:5.0.3
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: minxrka
+      MONGO_INITDB_ROOT_PASSWORD: minxrka
