@@ -52,7 +52,7 @@ const PostController = {
   },
   getPostById: async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const userId = Number(req.user.userId);
 
     try {
       const post = await prisma.post.findUnique({
@@ -116,6 +116,7 @@ const PostController = {
   deletePost: async (req, res) => {
     const { id } = req.params;
     const postId = Number(id);
+    const userId = Number(req.user.userId);
 
     const post = await prisma.post.findUnique({
       where: { id: postId },
@@ -124,21 +125,25 @@ const PostController = {
       return res.status(404).json({ error: 'Пост не найден' });
     }
 
-    if (post.authorId !== req.user.userId) {
+    if (post.authorId !== userId) {
       return res.status(403).json({ error: 'Нет доступа' });
     }
 
     try {
       const transaction = await prisma.$transaction([
-        prisma.comment.deleteMany({ where: { postId: id } }),
-        prisma.like.deleteMany({ where: { postId: id } }),
-        prisma.post.delete({ where: { id } }),
+        prisma.comment.deleteMany({ where: { postId: postId } }),
+        prisma.like.deleteMany({ where: { postId: postId } }),
+        prisma.post.delete({ where: { id: postId } }),
       ]);
 
       res.json(transaction);
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: 'Ошибка сервера' });
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        details:
+          process.env.NODE_ENV === 'development' ? error.message : undefined,
+      });
     }
   },
 };

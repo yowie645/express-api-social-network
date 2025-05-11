@@ -1,3 +1,4 @@
+// CommentController.js
 const { prisma } = require('../prisma/prisma.client');
 
 const CommentController = {
@@ -10,7 +11,6 @@ const CommentController = {
     }
 
     try {
-      // проверка, существует ли пост
       const post = await prisma.post.findUnique({
         where: { id: Number(postId) },
       });
@@ -24,6 +24,15 @@ const CommentController = {
           postId: Number(postId),
           userId: Number(userId),
           content,
+        },
+        include: {
+          user: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+            },
+          },
         },
       });
 
@@ -40,7 +49,7 @@ const CommentController = {
 
   deleteComment: async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const userId = Number(req.user.userId);
 
     try {
       const comment = await prisma.comment.findUnique({
@@ -51,7 +60,7 @@ const CommentController = {
         return res.status(404).json({ error: 'Комментарий не найден' });
       }
 
-      if (comment.userId !== Number(userId)) {
+      if (comment.userId !== userId) {
         return res.status(403).json({
           error: 'Нет прав для удаления этого комментария',
         });

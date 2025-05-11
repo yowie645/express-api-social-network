@@ -76,19 +76,10 @@ const UserController = {
 
     try {
       const user = await prisma.user.findUnique({
-        where: { id: Number(id) },
+        where: { id: Number(id) }, // Преобразование в число
         include: {
           followers: true,
           following: true,
-          posts: {
-            include: {
-              likes: true,
-              comments: true,
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-          },
         },
       });
 
@@ -98,36 +89,27 @@ const UserController = {
 
       const isFollowing = await prisma.follows.findFirst({
         where: {
-          AND: [{ followerId: Number(userId) }, { followingId: Number(id) }],
+          AND: [
+            { followerId: Number(userId) }, // Преобразование
+            { followingId: Number(id) }, // Преобразование
+          ],
         },
       });
-
-      const postsWithLikeInfo = user.posts.map((post) => ({
-        ...post,
-        likedByUser: post.likes.some((like) => like.userId === Number(userId)),
-        likesCount: post.likes.length,
-        commentsCount: post.comments.length,
-      }));
 
       res.json({
         ...user,
         isFollowing: Boolean(isFollowing),
-        posts: postsWithLikeInfo,
       });
     } catch (error) {
       console.error('Error in getUserById:', error);
-      res.status(500).json({
-        error: 'Ошибка сервера',
-        details:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
-      });
+      res.status(500).json({ error: 'Ошибка сервера' });
     }
   },
 
   updateUser: async (req, res) => {
     const { id } = req.params;
     const { email, name, dateOfBirth, bio, location } = req.body;
-    const userId = Number(req.user.userId);
+    const userId = Number(req.user.userId); // Преобразование
 
     let filePath;
 
@@ -137,6 +119,7 @@ const UserController = {
 
     // Проверка прав
     if (Number(id) !== userId) {
+      // Сравниваем числа
       return res.status(403).json({ error: 'Недостаточно прав' });
     }
 
@@ -154,7 +137,7 @@ const UserController = {
       }
 
       const user = await prisma.user.update({
-        where: { id: userId },
+        where: { id: userId }, // Используем преобразованный ID
         data: {
           email: email || undefined,
           name: name || undefined,
@@ -167,18 +150,14 @@ const UserController = {
       res.json(user);
     } catch (error) {
       console.error('Error in updateUser:', error);
-      res.status(500).json({
-        error: 'Ошибка сервера',
-        details:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
-      });
+      res.status(500).json({ error: 'Ошибка сервера' });
     }
   },
 
   current: async (req, res) => {
     try {
       const user = await prisma.user.findUnique({
-        where: { id: Number(req.user.userId) },
+        where: { id: Number(req.user.userId) }, // Преобразование
         include: {
           followers: {
             include: {
@@ -190,42 +169,16 @@ const UserController = {
               following: true,
             },
           },
-          posts: {
-            include: {
-              likes: true,
-              comments: true,
-            },
-            orderBy: {
-              createdAt: 'desc',
-            },
-          },
         },
       });
 
       if (!user) {
         return res.status(400).json({ error: 'Пользователь не найден' });
       }
-
-      const postsWithLikeInfo = user.posts.map((post) => ({
-        ...post,
-        likedByUser: post.likes.some(
-          (like) => like.userId === Number(req.user.userId)
-        ),
-        likesCount: post.likes.length,
-        commentsCount: post.comments.length,
-      }));
-
-      res.json({
-        ...user,
-        posts: postsWithLikeInfo,
-      });
+      res.json(user);
     } catch (error) {
       console.error('Error in current:', error);
-      res.status(500).json({
-        error: 'Ошибка сервера',
-        details:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
-      });
+      res.status(500).json({ error: 'Ошибка сервера' });
     }
   },
 };
