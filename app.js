@@ -9,18 +9,50 @@ require('dotenv').config();
 
 const app = express();
 
-// Настройка CORS с явным указанием допустимых доменов
-app.use(
-  cors({
-    origin: [
-      'http://localhost:5173',
-      'https://client-social-network-one.vercel.app',
-    ],
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-    credentials: true,
-  })
-);
+// Полная настройка CORS
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://client-social-network-one.vercel.app',
+  'https://client-social-network-git-main.yowie645.vercel.app',
+  /\.vercel\.app$/, //поддомены vercel
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    if (!origin) return callback(null, true);
+
+    if (
+      allowedOrigins.some((allowedOrigin) => {
+        if (typeof allowedOrigin === 'string') {
+          return origin === allowedOrigin;
+        } else if (allowedOrigin instanceof RegExp) {
+          return allowedOrigin.test(origin);
+        }
+        return false;
+      })
+    ) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+  ],
+  exposedHeaders: ['Authorization', 'X-Total-Count'],
+  credentials: true,
+  maxAge: 86400, // 24 часа
+  optionsSuccessStatus: 200, // для старых браузеров
+};
+
+// CORS ко всем маршрутам
+app.use(cors(corsOptions));
+
+app.options('*', cors(corsOptions));
 
 // Логирование запросов
 app.use(logger('dev'));
@@ -30,13 +62,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-// Health check endpoint
-app.get('/health', (req, res) => {
+// Health check endpoint с CORS
+app.get('/health', cors(corsOptions), (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
 
 // Корневой маршрут с информацией об API
-app.get('/', (req, res) => {
+app.get('/', cors(corsOptions), (req, res) => {
   res.json({
     name: 'Social Network API',
     version: '1.0.0',
@@ -49,10 +81,10 @@ app.get('/', (req, res) => {
 });
 
 // Обработка favicon
-app.get('/favicon.ico', (req, res) => res.status(204).end());
+app.get('/favicon.ico', cors(corsOptions), (req, res) => res.status(204).end());
 
-// Статические файлы
-app.use('/uploads', express.static('uploads'));
+// Статические файлы с CORS
+app.use('/uploads', cors(corsOptions), express.static('uploads'));
 
 // Проверка и создание папки uploads
 if (!fs.existsSync('uploads')) {
@@ -61,15 +93,21 @@ if (!fs.existsSync('uploads')) {
 
 // Основные API маршруты
 const apiRouter = require('./routes');
-app.use('/api', apiRouter);
+app.use('/api', cors(corsOptions), apiRouter);
 
 // Обработка 404 ошибки
 app.use((req, res, next) => {
   next(createError(404, `Resource ${req.path} not found`));
 });
 
-// Глобальный обработчик ошибок
+// Глобальный обработчик ошибок с CORS
 app.use((err, req, res, next) => {
+  // Устанавливаем CORS заголовки даже для ошибок
+  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+
   // Логирование ошибки
   console.error(`[${new Date().toISOString()}] Error: ${err.message}`);
   console.error(err.stack);
