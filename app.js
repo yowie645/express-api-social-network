@@ -12,8 +12,8 @@ require('dotenv').config();
 app.use(logger('dev'));
 
 // Парсинг JSON и URL-encoded данных
-app.use(express.json());
-app.use(express.urlencoded({ extended: false }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: false, limit: '50mb' }));
 app.use(cookieParser());
 
 // Настройки CORS
@@ -21,26 +21,23 @@ const allowedOrigins = [
   'http://localhost:5173',
   'https://client-social-network-nu.vercel.app',
   'https://client-social-network-git-main-yowie645.vercel.app',
-  /\.vercel\.app$/, // все поддомены vercel
+  /\.vercel\.app$/,
 ];
 
 const corsOptions = {
   origin: function (origin, callback) {
-    // Разрешить запросы без origin (например, от мобильных приложений или Postman)
-    if (!origin) return callback(null, true);
-
-    // Проверяем соответствие origin списку разрешенных
     if (
+      !origin ||
       allowedOrigins.some((allowedOrigin) =>
         typeof allowedOrigin === 'string'
           ? origin === allowedOrigin
           : allowedOrigin.test(origin)
       )
     ) {
-      return callback(null, true);
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
     }
-
-    callback(new Error('Not allowed by CORS'));
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
@@ -51,48 +48,45 @@ const corsOptions = {
     'Accept',
   ],
   optionsSuccessStatus: 204,
+  exposedHeaders: ['Content-Disposition'],
 };
 
-// Применяем CORS ко всем маршрутам
 app.use(cors(corsOptions));
-
-// Разрешаем preflight-запросы
 app.options('*', cors(corsOptions));
 
-// Раздача статических файлов
-app.use('/uploads', express.static('uploads'));
+// Создание папки uploads если её нет
+const uploadsDir = path.join(__dirname, 'uploads');
+if (!fs.existsSync(uploadsDir)) {
+  fs.mkdirSync(uploadsDir, { recursive: true });
+}
+
+// Настройка статических файлов с правильными заголовками
+app.use(
+  '/uploads',
+  express.static(uploadsDir, {
+    setHeaders: (res, filePath) => {
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Cross-Origin-Resource-Policy', 'cross-origin');
+      res.set('Cache-Control', 'public, max-age=31536000');
+
+      const ext = path.extname(filePath);
+      if (['.png', '.jpg', '.jpeg'].includes(ext)) {
+        res.type(ext === '.png' ? 'image/png' : 'image/jpeg');
+      }
+    },
+  })
+);
 
 // Подключение роутов
 app.use('/api', require('./routes'));
 
-// Создание папки uploads, если её нет
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
-}
-// После создания папки uploads
-if (process.env.NODE_ENV === 'production') {
-  app.use('/uploads', (req, res, next) => {
-    if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
-    next();
-  });
-}
-app.use(
-  '/uploads',
-  (req, res, next) => {
-    const ext = path.extname(req.path);
-    if (ext === '.png') res.type('image/png');
-    else if (ext === '.jpg' || ext === '.jpeg') res.type('image/jpeg');
-    next();
-  },
-  express.static('uploads')
-);
 // Обработка 404
-app.use(function (req, res, next) {
+app.use((req, res, next) => {
   next(createError(404, 'Страница не найдена'));
 });
 
 // Обработчик ошибок
-app.use(function (err, req, res, next) {
+app.use((err, req, res, next) => {
   console.error(err.stack || err);
 
   res.status(err.status || 500).json({

@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const Jdenticon = require('jdenticon');
 const path = require('path');
 const fs = require('fs');
+const fsPromises = fs.promises;
 const jwt = require('jsonwebtoken');
 
 const UserController = {
@@ -14,6 +15,7 @@ const UserController = {
     }
 
     try {
+      // Проверка существующего пользователя
       const existingUser = await prisma.user.findUnique({ where: { email } });
       if (existingUser) {
         return res
@@ -21,13 +23,22 @@ const UserController = {
           .json({ error: 'Пользователь с данным email уже существует' });
       }
 
+      // Хеширование пароля
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      const png = Jdenticon.toPng(`${name}_${Date.now()}`, 200);
-      const avatarName = `${name}_${Date.now()}.png`;
-      const avatarPath = path.join(__dirname, '/../uploads', avatarName);
-      fs.writeFileSync(avatarPath, png);
+      // Создание папки uploads если не существует
+      const uploadsDir = path.join(__dirname, '../uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        await fsPromises.mkdir(uploadsDir, { recursive: true });
+      }
 
+      // Генерация и сохранение аватарки
+      const avatarName = `avatar_${name}_${Date.now()}.png`;
+      const avatarPath = path.join(uploadsDir, avatarName);
+      const pngBuffer = Jdenticon.toPng(`${name}${Date.now()}`, 200);
+      await fsPromises.writeFile(avatarPath, pngBuffer);
+
+      // Создание пользователя
       const user = await prisma.user.create({
         data: {
           email,
@@ -40,7 +51,12 @@ const UserController = {
       res.json(user);
     } catch (error) {
       console.error('Error in register:', error);
-      res.status(500).json({ error: 'Ошибка сервера' });
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error.message,
+        }),
+      });
     }
   },
 
@@ -50,6 +66,7 @@ const UserController = {
     if (!email || !password) {
       return res.status(400).json({ error: 'Все поля обязательны' });
     }
+
     try {
       const user = await prisma.user.findUnique({ where: { email } });
 
@@ -62,24 +79,38 @@ const UserController = {
         return res.status(400).json({ error: 'Неверный логин или пароль' });
       }
 
-      const token = jwt.sign({ userId: user.id }, process.env.SECRET_KEY);
+      const token = jwt.sign({ userId: user.id }, process.env.SECRET_KEY, {
+        expiresIn: '30d',
+      });
       res.json({ token });
     } catch (error) {
       console.error('Error in login:', error);
-      res.status(500).json({ error: 'Ошибка сервера' });
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error.message,
+        }),
+      });
     }
   },
 
   getUserById: async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const userId = Number(req.user.userId);
 
     try {
       const user = await prisma.user.findUnique({
-        where: { id: Number(id) }, // Преобразование в число
+        where: { id: Number(id) },
         include: {
           followers: true,
           following: true,
+          posts: {
+            orderBy: { createdAt: 'desc' },
+            include: {
+              likes: true,
+              comments: true,
+            },
+          },
         },
       });
 
@@ -89,75 +120,97 @@ const UserController = {
 
       const isFollowing = await prisma.follows.findFirst({
         where: {
-          AND: [
-            { followerId: Number(userId) }, // Преобразование
-            { followingId: Number(id) }, // Преобразование
-          ],
+          AND: [{ followerId: userId }, { followingId: Number(id) }],
         },
       });
 
       res.json({
         ...user,
         isFollowing: Boolean(isFollowing),
+        posts: user.posts.map((post) => ({
+          ...post,
+          likedByUser: post.likes.some((like) => like.userId === userId),
+          likesCount: post.likes.length,
+          commentsCount: post.comments.length,
+        })),
       });
     } catch (error) {
       console.error('Error in getUserById:', error);
-      res.status(500).json({ error: 'Ошибка сервера' });
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error.message,
+        }),
+      });
     }
   },
 
   updateUser: async (req, res) => {
     const { id } = req.params;
     const { email, name, dateOfBirth, bio, location } = req.body;
-    const userId = Number(req.user.userId); // Преобразование
+    const userId = Number(req.user.userId);
 
-    let filePath;
-
-    if (req.file && req.file.path) {
-      filePath = req.file.path;
-    }
-
-    // Проверка прав
     if (Number(id) !== userId) {
-      // Сравниваем числа
       return res.status(403).json({ error: 'Недостаточно прав' });
     }
 
     try {
-      if (email) {
-        const existingUser = await prisma.user.findFirst({
-          where: { email: email },
-        });
+      let avatarUrl;
+      const uploadsDir = path.join(__dirname, '../uploads');
 
-        if (existingUser && existingUser.id !== userId) {
-          return res
-            .status(400)
-            .json({ error: 'Пользователь с таким email уже существует' });
+      // Обработка новой аватарки
+      if (req.file) {
+        const avatarName = `avatar_${name}_${Date.now()}${path.extname(
+          req.file.originalname
+        )}`;
+        const avatarPath = path.join(uploadsDir, avatarName);
+
+        await fsPromises.writeFile(avatarPath, req.file.buffer);
+        avatarUrl = `/uploads/${avatarName}`;
+
+        // Удаление старой аватарки если она существует
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (user.avatarUrl && user.avatarUrl.startsWith('/uploads/')) {
+          const oldAvatarPath = path.join(
+            uploadsDir,
+            user.avatarUrl.replace('/uploads/', '')
+          );
+          try {
+            await fsPromises.unlink(oldAvatarPath);
+          } catch (err) {
+            console.error('Error deleting old avatar:', err);
+          }
         }
       }
 
       const user = await prisma.user.update({
-        where: { id: userId }, // Используем преобразованный ID
+        where: { id: userId },
         data: {
           email: email || undefined,
           name: name || undefined,
-          avatarUrl: filePath ? `/${filePath}` : undefined,
+          avatarUrl: avatarUrl || undefined,
           dateOfBirth: dateOfBirth || undefined,
           bio: bio || undefined,
           location: location || undefined,
         },
       });
+
       res.json(user);
     } catch (error) {
       console.error('Error in updateUser:', error);
-      res.status(500).json({ error: 'Ошибка сервера' });
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error.message,
+        }),
+      });
     }
   },
 
   current: async (req, res) => {
     try {
       const user = await prisma.user.findUnique({
-        where: { id: Number(req.user.userId) }, // Преобразование
+        where: { id: Number(req.user.userId) },
         include: {
           followers: {
             include: {
@@ -169,16 +222,39 @@ const UserController = {
               following: true,
             },
           },
+          posts: {
+            orderBy: { createdAt: 'desc' },
+            include: {
+              likes: true,
+              comments: true,
+            },
+          },
         },
       });
 
       if (!user) {
-        return res.status(400).json({ error: 'Пользователь не найден' });
+        return res.status(404).json({ error: 'Пользователь не найден' });
       }
-      res.json(user);
+
+      res.json({
+        ...user,
+        posts: user.posts.map((post) => ({
+          ...post,
+          likedByUser: post.likes.some(
+            (like) => like.userId === Number(req.user.userId)
+          ),
+          likesCount: post.likes.length,
+          commentsCount: post.comments.length,
+        })),
+      });
     } catch (error) {
       console.error('Error in current:', error);
-      res.status(500).json({ error: 'Ошибка сервера' });
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error.message,
+        }),
+      });
     }
   },
 };
