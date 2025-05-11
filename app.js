@@ -19,35 +19,35 @@ const allowedOrigins = [
 
 const corsOptions = {
   origin: function (origin, callback) {
-    if (!origin) return callback(null, true);
+    const allowedOrigins = [
+      'http://localhost:5173',
+      'https://client-social-network-one.vercel.app',
+      'https://client-social-network-git-main-yowie645.vercel.app',
+    ];
 
-    if (
-      allowedOrigins.some((allowedOrigin) => {
-        if (typeof allowedOrigin === 'string') {
-          return origin === allowedOrigin;
-        } else if (allowedOrigin instanceof RegExp) {
-          return allowedOrigin.test(origin);
-        }
-        return false;
-      })
-    ) {
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
       callback(null, true);
     } else {
       callback(new Error('Not allowed by CORS'));
     }
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: [
     'Content-Type',
     'Authorization',
     'X-Requested-With',
     'Accept',
+    'Origin',
+    'Access-Control-Request-Method',
+    'Access-Control-Request-Headers',
   ],
-  exposedHeaders: ['Authorization', 'X-Total-Count'],
   credentials: true,
-  maxAge: 86400, // 24 часа
-  optionsSuccessStatus: 200, // для старых браузеров
+  optionsSuccessStatus: 204,
 };
+
+app.use(cors(corsOptions));
+
+app.options('*', cors(corsOptions));
 
 // CORS ко всем маршрутам
 app.use(cors(corsOptions));
