@@ -3,7 +3,6 @@ const express = require('express');
 const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
-const fs = require('fs');
 const app = express();
 const cors = require('cors');
 require('dotenv').config();
@@ -53,29 +52,6 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 app.options('*', cors(corsOptions));
-
-// Создание папки uploads если её нет
-const uploadsDir = path.join(__dirname, 'uploads');
-if (!fs.existsSync(uploadsDir)) {
-  fs.mkdirSync(uploadsDir, { recursive: true });
-}
-
-// Настройка статических файлов с правильными заголовками
-app.use(
-  '/uploads',
-  express.static(uploadsDir, {
-    setHeaders: (res, filePath) => {
-      res.set('Access-Control-Allow-Origin', '*');
-      res.set('Cross-Origin-Resource-Policy', 'cross-origin');
-      res.set('Cache-Control', 'public, max-age=31536000');
-
-      const ext = path.extname(filePath);
-      if (['.png', '.jpg', '.jpeg'].includes(ext)) {
-        res.type(ext === '.png' ? 'image/png' : 'image/jpeg');
-      }
-    },
-  })
-);
 
 // Подключение роутов
 app.use('/api', require('./routes'));
