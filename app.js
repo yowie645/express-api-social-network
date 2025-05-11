@@ -44,11 +44,6 @@ const corsOptions = {
   credentials: true,
   optionsSuccessStatus: 204,
 };
-
-app.use(cors(corsOptions));
-
-app.options('*', cors(corsOptions));
-
 // CORS ко всем маршрутам
 app.use(cors(corsOptions));
 
@@ -62,13 +57,13 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-// Health check endpoint с CORS
-app.get('/health', cors(corsOptions), (req, res) => {
+// Health check endpoint
+app.get('/health', (req, res) => {
   res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
 
 // Корневой маршрут с информацией об API
-app.get('/', cors(corsOptions), (req, res) => {
+app.get('/', (req, res) => {
   res.json({
     name: 'Social Network API',
     version: '1.0.0',
@@ -81,10 +76,10 @@ app.get('/', cors(corsOptions), (req, res) => {
 });
 
 // Обработка favicon
-app.get('/favicon.ico', cors(corsOptions), (req, res) => res.status(204).end());
+app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// Статические файлы с CORS
-app.use('/uploads', cors(corsOptions), express.static('uploads'));
+// Статические файлы
+app.use('/uploads', express.static('uploads'));
 
 // Проверка и создание папки uploads
 if (!fs.existsSync('uploads')) {
@@ -92,22 +87,15 @@ if (!fs.existsSync('uploads')) {
 }
 
 // Основные API маршруты
-const apiRouter = require('./routes');
-app.use('/api', cors(corsOptions), apiRouter);
+app.use('/api', require('./routes'));
 
 // Обработка 404 ошибки
 app.use((req, res, next) => {
   next(createError(404, `Resource ${req.path} not found`));
 });
 
-// Глобальный обработчик ошибок с CORS
+// Глобальный обработчик ошибок
 app.use((err, req, res, next) => {
-  // Устанавливаем CORS заголовки даже для ошибок
-  res.header('Access-Control-Allow-Origin', req.headers.origin || '*');
-  res.header('Access-Control-Allow-Credentials', 'true');
-  res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-  res.header('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-
   // Логирование ошибки
   console.error(`[${new Date().toISOString()}] Error: ${err.message}`);
   console.error(err.stack);
