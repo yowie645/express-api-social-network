@@ -4,52 +4,92 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
 const fs = require('fs');
-const app = express();
 const cors = require('cors');
 require('dotenv').config();
 
-app.use(cors());
+const app = express();
+
+// Настройка CORS с явным указанием допустимых доменов
+app.use(
+  cors({
+    origin: [
+      'http://localhost:5173',
+      'https://client-social-network-one.vercel.app',
+    ],
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  })
+);
+
+// Логирование запросов
 app.use(logger('dev'));
+
+// Парсинг тела запроса
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
-// app.set("view engine", "jade");
 
-// Раздача статических файлов из папки uploads
-app.use('/uploads', express.static('uploads'));
-
-app.use('/api', require('./routes'));
-
-// Проверка и создание папки uploads если ее нет
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
-}
-
-// Обработка 404 ошибки
-app.use(function (req, res, next) {
-  next(createError(404));
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'OK', timestamp: new Date() });
 });
 
-// Обработчик ошибок в JSON формате
-app.use(function (err, req, res, next) {
-  // Логирование ошибки для разработки
-  if (req.app.get('env') === 'development') {
-    console.error(err);
-  }
-
-  // Отправка ошибки в JSON формате
-  res.status(err.status || 500);
+// Корневой маршрут с информацией об API
+app.get('/', (req, res) => {
   res.json({
-    error: {
-      status: err.status || 500,
-      message: err.message,
-      // Дополнительные детали только в режиме разработки
-      ...(req.app.get('env') === 'development' && { stack: err.stack }),
+    name: 'Social Network API',
+    version: '1.0.0',
+    documentation: '/api-docs', // Можно добавить Swagger позже
+    endpoints: {
+      auth: '/api/auth',
+      posts: '/api/posts',
+      users: '/api/users',
     },
   });
 });
 
-// Обработчик для favicon.ico чтобы избежать лишних 404 ошибок
+// Обработка favicon
 app.get('/favicon.ico', (req, res) => res.status(204).end());
+
+// Статические файлы
+app.use('/uploads', express.static('uploads'));
+
+// Проверка и создание папки uploads
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+}
+
+// Основные API маршруты
+app.use('/api', require('./routes'));
+
+// Обработка 404 ошибки
+app.use((req, res, next) => {
+  next(createError(404, `Resource ${req.path} not found`));
+});
+
+// Глобальный обработчик ошибок
+app.use((err, req, res, next) => {
+  // Логирование ошибки
+  console.error(`[${new Date().toISOString()}] Error: ${err.message}`);
+  console.error(err.stack);
+
+  // Формирование ответа
+  const response = {
+    error: {
+      status: err.status || 500,
+      message: err.message,
+      path: req.path,
+      timestamp: new Date().toISOString(),
+    },
+  };
+
+  // Добавление stack trace только в development
+  if (req.app.get('env') === 'development') {
+    response.error.stack = err.stack;
+  }
+
+  res.status(err.status || 500).json(response);
+});
 
 module.exports = app;
