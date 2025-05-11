@@ -4,118 +4,39 @@ const path = require('path');
 const cookieParser = require('cookie-parser');
 const logger = require('morgan');
 const fs = require('fs');
+const app = express();
 const cors = require('cors');
 require('dotenv').config();
 
-const app = express();
-
-// Полная настройка CORS
-const allowedOrigins = [
-  'http://localhost:5173',
-  'https://client-social-network-one.vercel.app',
-  'https://client-social-network-git-main.yowie645.vercel.app',
-  /\.vercel\.app$/, //поддомены vercel
-];
-
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      'http://localhost:5173',
-      'https://client-social-network-one.vercel.app',
-      'https://client-social-network-git-main-yowie645.vercel.app',
-    ];
-
-    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
-      callback(null, true);
-    } else {
-      callback(new Error('Not allowed by CORS'));
-    }
-  },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: [
-    'Content-Type',
-    'Authorization',
-    'X-Requested-With',
-    'Accept',
-    'Origin',
-    'Access-Control-Request-Method',
-    'Access-Control-Request-Headers',
-  ],
-  credentials: true,
-  optionsSuccessStatus: 204,
-};
-// CORS ко всем маршрутам
-app.use(cors(corsOptions));
-
-app.options('*', cors(corsOptions));
-
-// Логирование запросов
+app.use(cors());
 app.use(logger('dev'));
-
-// Парсинг тела запроса
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
-
-// Health check endpoint
-app.get('/health', (req, res) => {
-  res.status(200).json({ status: 'OK', timestamp: new Date() });
-});
-
-// Корневой маршрут с информацией об API
-app.get('/', (req, res) => {
-  res.json({
-    name: 'Social Network API',
-    version: '1.0.0',
-    endpoints: {
-      auth: '/api/auth',
-      posts: '/api/posts',
-      users: '/api/users',
-    },
-  });
-});
-
-// Обработка favicon
-app.get('/favicon.ico', (req, res) => res.status(204).end());
-
-// Статические файлы
+/* app.set('view engine', 'jade'); */
+//Раздача стат.файлов из папки uploads
 app.use('/uploads', express.static('uploads'));
 
-// Проверка и создание папки uploads
-if (!fs.existsSync('uploads')) {
-  fs.mkdirSync('uploads');
-}
-
-// Основные API маршруты
 app.use('/api', require('./routes'));
 
-// Обработка 404 ошибки
-app.use((req, res, next) => {
-  next(createError(404, `Resource ${req.path} not found`));
+if (!fs.existsSync('uploads')) {
+  fs.mkdirSync('uploads');
+} //проверка нахождения папки, если нет то ее создание
+
+// catch 404 and forward to error handler
+app.use(function (req, res, next) {
+  next(createError(404));
 });
 
-// Глобальный обработчик ошибок
-app.use((err, req, res, next) => {
-  // Логирование ошибки
-  console.error(`[${new Date().toISOString()}] Error: ${err.message}`);
-  console.error(err.stack);
+// error handler
+app.use(function (err, req, res, next) {
+  // set locals, only providing error in development
+  res.locals.message = err.message;
+  res.locals.error = req.app.get('env') === 'development' ? err : {};
 
-  // Формирование ответа
-  const response = {
-    error: {
-      status: err.status || 500,
-      message: err.message,
-      path: req.path,
-      timestamp: new Date().toISOString(),
-    },
-  };
-
-  // Добавление stack trace только в development
-  if (req.app.get('env') === 'development') {
-    response.error.stack = err.stack;
-  }
-
-  res.status(err.status || 500).json(response);
+  // render the error page
+  res.status(err.status || 500);
+  res.render('error');
 });
 
 module.exports = app;
