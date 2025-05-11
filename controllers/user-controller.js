@@ -1,8 +1,10 @@
 const { prisma } = require('../prisma/prisma.client');
 const bcrypt = require('bcryptjs');
 const Jdenticon = require('jdenticon');
+const path = require('path');
+const fs = require('fs');
+const fsPromises = fs.promises;
 const jwt = require('jsonwebtoken');
-const { Buffer } = require('buffer');
 
 const UserController = {
   register: async (req, res) => {
@@ -24,14 +26,17 @@ const UserController = {
       // Хеширование пароля
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Генерация SVG аватарки
-      const svgString = Jdenticon.toSvg(name + Date.now(), 200, {
-        backColor: '#FFFFFF',
-        saturation: 0.7,
-      });
+      // Создание папки uploads если не существует
+      const uploadsDir = path.join(__dirname, '../uploads');
+      if (!fs.existsSync(uploadsDir)) {
+        await fsPromises.mkdir(uploadsDir, { recursive: true });
+      }
 
-      const base64Avatar = Buffer.from(svgString).toString('base64');
-      const avatarUrl = `data:image/svg+xml;base64,${base64Avatar}`;
+      // Генерация и сохранение аватарки
+      const avatarName = `avatar_${name}_${Date.now()}.png`;
+      const avatarPath = path.join(uploadsDir, avatarName);
+      const pngBuffer = Jdenticon.toPng(`${name}${Date.now()}`, 200);
+      await fsPromises.writeFile(avatarPath, pngBuffer);
 
       // Создание пользователя
       const user = await prisma.user.create({
@@ -39,20 +44,11 @@ const UserController = {
           email,
           password: hashedPassword,
           name,
-          avatarUrl,
+          avatarUrl: `/uploads/${avatarName}`,
         },
       });
 
-      // Формируем ответ без пароля
-      const userResponse = {
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        avatarUrl: user.avatarUrl,
-        createdAt: user.createdAt,
-      };
-
-      res.status(201).json(userResponse);
+      res.json(user);
     } catch (error) {
       console.error('Error in register:', error);
       res.status(500).json({
@@ -75,30 +71,18 @@ const UserController = {
       const user = await prisma.user.findUnique({ where: { email } });
 
       if (!user) {
-        return res.status(401).json({ error: 'Неверный email или пароль' });
+        return res.status(400).json({ error: 'Неверный логин или пароль' });
       }
 
-      const validPassword = await bcrypt.compare(password, user.password);
-      if (!validPassword) {
-        return res.status(401).json({ error: 'Неверный email или пароль' });
+      const valid = await bcrypt.compare(password, user.password);
+      if (!valid) {
+        return res.status(400).json({ error: 'Неверный логин или пароль' });
       }
 
-      // Генерация JWT токена
-      const token = jwt.sign(
-        { userId: user.id, email: user.email },
-        process.env.SECRET_KEY,
-        { expiresIn: '30d' }
-      );
-
-      const userResponse = {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatarUrl: user.avatarUrl,
-        token,
-      };
-
-      res.json(userResponse);
+      const token = jwt.sign({ userId: user.id }, process.env.SECRET_KEY, {
+        expiresIn: '30d',
+      });
+      res.json({ token });
     } catch (error) {
       console.error('Error in login:', error);
       res.status(500).json({
@@ -112,20 +96,12 @@ const UserController = {
 
   getUserById: async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.userId;
+    const userId = Number(req.user.userId);
 
     try {
       const user = await prisma.user.findUnique({
         where: { id: Number(id) },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          avatarUrl: true,
-          bio: true,
-          location: true,
-          dateOfBirth: true,
-          createdAt: true,
+        include: {
           followers: true,
           following: true,
           posts: {
@@ -144,26 +120,20 @@ const UserController = {
 
       const isFollowing = await prisma.follows.findFirst({
         where: {
-          followerId: Number(userId),
-          followingId: Number(id),
+          AND: [{ followerId: userId }, { followingId: Number(id) }],
         },
       });
 
-      const formattedPosts = user.posts.map((post) => ({
-        ...post,
-        likedByUser: post.likes.some((like) => like.userId === Number(userId)),
-        likesCount: post.likes.length,
-        commentsCount: post.comments.length,
-      }));
-
-      // Формируем ответ
-      const response = {
+      res.json({
         ...user,
         isFollowing: Boolean(isFollowing),
-        posts: formattedPosts,
-      };
-
-      res.json(response);
+        posts: user.posts.map((post) => ({
+          ...post,
+          likedByUser: post.likes.some((like) => like.userId === userId),
+          likesCount: post.likes.length,
+          commentsCount: post.comments.length,
+        })),
+      });
     } catch (error) {
       console.error('Error in getUserById:', error);
       res.status(500).json({
@@ -178,44 +148,54 @@ const UserController = {
   updateUser: async (req, res) => {
     const { id } = req.params;
     const { email, name, dateOfBirth, bio, location } = req.body;
-    const userId = req.user.userId;
+    const userId = Number(req.user.userId);
 
-    if (Number(id) !== Number(userId)) {
+    if (Number(id) !== userId) {
       return res.status(403).json({ error: 'Недостаточно прав' });
     }
 
     try {
-      let updateData = {
-        email: email || undefined,
-        name: name || undefined,
-        dateOfBirth: dateOfBirth || undefined,
-        bio: bio || undefined,
-        location: location || undefined,
-      };
+      let avatarUrl;
+      const uploadsDir = path.join(__dirname, '../uploads');
 
-      // Если есть новый файл аватарки
+      // Обработка новой аватарки
       if (req.file) {
-        const svgString = Jdenticon.toSvg(name + Date.now(), 200);
-        const base64Avatar = Buffer.from(svgString).toString('base64');
-        updateData.avatarUrl = `data:image/svg+xml;base64,${base64Avatar}`;
+        const avatarName = `avatar_${name}_${Date.now()}${path.extname(
+          req.file.originalname
+        )}`;
+        const avatarPath = path.join(uploadsDir, avatarName);
+
+        await fsPromises.writeFile(avatarPath, req.file.buffer);
+        avatarUrl = `/uploads/${avatarName}`;
+
+        // Удаление старой аватарки если она существует
+        const user = await prisma.user.findUnique({ where: { id: userId } });
+        if (user.avatarUrl && user.avatarUrl.startsWith('/uploads/')) {
+          const oldAvatarPath = path.join(
+            uploadsDir,
+            user.avatarUrl.replace('/uploads/', '')
+          );
+          try {
+            await fsPromises.unlink(oldAvatarPath);
+          } catch (err) {
+            console.error('Error deleting old avatar:', err);
+          }
+        }
       }
 
-      const updatedUser = await prisma.user.update({
-        where: { id: Number(id) },
-        data: updateData,
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          avatarUrl: true,
-          bio: true,
-          location: true,
-          dateOfBirth: true,
-          createdAt: true,
+      const user = await prisma.user.update({
+        where: { id: userId },
+        data: {
+          email: email || undefined,
+          name: name || undefined,
+          avatarUrl: avatarUrl || undefined,
+          dateOfBirth: dateOfBirth || undefined,
+          bio: bio || undefined,
+          location: location || undefined,
         },
       });
 
-      res.json(updatedUser);
+      res.json(user);
     } catch (error) {
       console.error('Error in updateUser:', error);
       res.status(500).json({
@@ -231,35 +211,15 @@ const UserController = {
     try {
       const user = await prisma.user.findUnique({
         where: { id: Number(req.user.userId) },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          avatarUrl: true,
-          bio: true,
-          location: true,
-          dateOfBirth: true,
-          createdAt: true,
+        include: {
           followers: {
             include: {
-              follower: {
-                select: {
-                  id: true,
-                  name: true,
-                  avatarUrl: true,
-                },
-              },
+              follower: true,
             },
           },
           following: {
             include: {
-              following: {
-                select: {
-                  id: true,
-                  name: true,
-                  avatarUrl: true,
-                },
-              },
+              following: true,
             },
           },
           posts: {
@@ -276,8 +236,7 @@ const UserController = {
         return res.status(404).json({ error: 'Пользователь не найден' });
       }
 
-      // Форматируем ответ
-      const response = {
+      res.json({
         ...user,
         posts: user.posts.map((post) => ({
           ...post,
@@ -287,9 +246,7 @@ const UserController = {
           likesCount: post.likes.length,
           commentsCount: post.comments.length,
         })),
-      };
-
-      res.json(response);
+      });
     } catch (error) {
       console.error('Error in current:', error);
       res.status(500).json({
