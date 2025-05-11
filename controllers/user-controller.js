@@ -1,42 +1,64 @@
 const { prisma } = require('../prisma/prisma.client');
 const bcrypt = require('bcryptjs');
 const Jdenticon = require('jdenticon');
-const path = require('path');
-const fs = require('fs');
-const fsPromises = fs.promises;
 const jwt = require('jsonwebtoken');
+const AWS = require('aws-sdk');
+const { v4: uuidv4 } = require('uuid');
+
+// Настройка S3 клиента для Yandex Cloud
+const s3 = new AWS.S3({
+  endpoint: 'https://storage.yandexcloud.net',
+  accessKeyId: process.env.YC_ACCESS_KEY_ID,
+  secretAccessKey: process.env.YC_SECRET_ACCESS_KEY,
+  region: process.env.YC_REGION || 'ru-central1',
+});
 
 const UserController = {
   register: async (req, res) => {
     const { email, password, name } = req.body;
 
     if (!email || !password || !name) {
-      return res.status(400).json({ error: 'Все поля обязательны' });
+      return res.status(400).json({
+        error: 'Все поля обязательны',
+        details: {
+          email: !email,
+          password: !password,
+          name: !name,
+        },
+      });
     }
 
     try {
       // Проверка существующего пользователя
-      const existingUser = await prisma.user.findUnique({ where: { email } });
+      const existingUser = await prisma.user.findUnique({
+        where: { email },
+        select: { id: true },
+      });
+
       if (existingUser) {
-        return res
-          .status(400)
-          .json({ error: 'Пользователь с данным email уже существует' });
+        return res.status(400).json({
+          error: 'Пользователь с данным email уже существует',
+          suggestion: 'Используйте другой email или войдите в систему',
+        });
       }
 
       // Хеширование пароля
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Создание папки uploads если не существует
-      const uploadsDir = path.join(__dirname, '../uploads');
-      if (!fs.existsSync(uploadsDir)) {
-        await fsPromises.mkdir(uploadsDir, { recursive: true });
-      }
-
-      // Генерация и сохранение аватарки
-      const avatarName = `avatar_${name}_${Date.now()}.png`;
-      const avatarPath = path.join(uploadsDir, avatarName);
+      // Генерация аватарки
       const pngBuffer = Jdenticon.toPng(`${name}${Date.now()}`, 200);
-      await fsPromises.writeFile(avatarPath, pngBuffer);
+      const avatarKey = `avatars/${uuidv4()}.png`;
+
+      // Загрузка в Yandex Object Storage
+      const uploadResult = await s3
+        .upload({
+          Bucket: process.env.YC_BUCKET_NAME,
+          Key: avatarKey,
+          Body: pngBuffer,
+          ContentType: 'image/png',
+          ACL: 'public-read',
+        })
+        .promise();
 
       // Создание пользователя
       const user = await prisma.user.create({
@@ -44,15 +66,27 @@ const UserController = {
           email,
           password: hashedPassword,
           name,
-          avatarUrl: `/uploads/${avatarName}`,
+          avatarUrl: uploadResult.Location,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          createdAt: true,
         },
       });
 
-      res.json(user);
+      res.status(201).json(user);
     } catch (error) {
-      console.error('Error in register:', error);
+      console.error('Registration Error:', {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+      });
+
       res.status(500).json({
-        error: 'Ошибка сервера',
+        error: 'Ошибка при регистрации',
         ...(process.env.NODE_ENV === 'development' && {
           details: error.message,
         }),
@@ -64,29 +98,62 @@ const UserController = {
     const { email, password } = req.body;
 
     if (!email || !password) {
-      return res.status(400).json({ error: 'Все поля обязательны' });
+      return res.status(400).json({
+        error: 'Все поля обязательны',
+        missing: {
+          email: !email,
+          password: !password,
+        },
+      });
     }
 
     try {
-      const user = await prisma.user.findUnique({ where: { email } });
+      const user = await prisma.user.findUnique({
+        where: { email },
+        select: {
+          id: true,
+          email: true,
+          password: true,
+          name: true,
+          avatarUrl: true,
+        },
+      });
 
       if (!user) {
-        return res.status(400).json({ error: 'Неверный логин или пароль' });
+        return res.status(401).json({
+          error: 'Неверные учетные данные',
+          suggestion: 'Проверьте email и пароль',
+        });
       }
 
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
-        return res.status(400).json({ error: 'Неверный логин или пароль' });
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        return res.status(401).json({
+          error: 'Неверные учетные данные',
+          suggestion: 'Проверьте пароль',
+        });
       }
 
-      const token = jwt.sign({ userId: user.id }, process.env.SECRET_KEY, {
-        expiresIn: '30d',
+      // Генерация JWT токена
+      const token = jwt.sign(
+        {
+          userId: user.id,
+          email: user.email,
+        },
+        process.env.SECRET_KEY,
+        { expiresIn: '30d' }
+      );
+
+      // Формируем ответ без пароля
+      const { password: _, ...userData } = user;
+      res.json({
+        ...userData,
+        token,
       });
-      res.json({ token });
     } catch (error) {
-      console.error('Error in login:', error);
+      console.error('Login Error:', error);
       res.status(500).json({
-        error: 'Ошибка сервера',
+        error: 'Ошибка входа',
         ...(process.env.NODE_ENV === 'development' && {
           details: error.message,
         }),
@@ -96,48 +163,109 @@ const UserController = {
 
   getUserById: async (req, res) => {
     const { id } = req.params;
-    const userId = Number(req.user.userId);
+    const userId = req.user?.userId;
 
     try {
       const user = await prisma.user.findUnique({
         where: { id: Number(id) },
-        include: {
-          followers: true,
-          following: true,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatarUrl: true,
+          bio: true,
+          location: true,
+          dateOfBirth: true,
+          createdAt: true,
+          followers: {
+            select: {
+              id: true,
+              follower: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+          },
+          following: {
+            select: {
+              id: true,
+              following: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+          },
           posts: {
             orderBy: { createdAt: 'desc' },
-            include: {
-              likes: true,
-              comments: true,
+            select: {
+              id: true,
+              content: true,
+              createdAt: true,
+              likes: {
+                select: {
+                  userId: true,
+                },
+              },
+              comments: {
+                select: {
+                  id: true,
+                },
+              },
+              author: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
             },
           },
         },
       });
 
       if (!user) {
-        return res.status(404).json({ error: 'Пользователь не найден' });
+        return res.status(404).json({
+          error: 'Пользователь не найден',
+          suggestion: 'Проверьте ID пользователя',
+        });
       }
 
-      const isFollowing = await prisma.follows.findFirst({
-        where: {
-          AND: [{ followerId: userId }, { followingId: Number(id) }],
-        },
-      });
+      // Проверка подписки
+      const isFollowing = userId
+        ? await prisma.follows.findFirst({
+            where: {
+              followerId: Number(userId),
+              followingId: Number(id),
+            },
+            select: { id: true },
+          })
+        : false;
+
+      // Форматирование постов
+      const formattedPosts = user.posts.map((post) => ({
+        ...post,
+        likedByUser: userId
+          ? post.likes.some((like) => like.userId === Number(userId))
+          : false,
+        likesCount: post.likes.length,
+        commentsCount: post.comments.length,
+      }));
 
       res.json({
         ...user,
         isFollowing: Boolean(isFollowing),
-        posts: user.posts.map((post) => ({
-          ...post,
-          likedByUser: post.likes.some((like) => like.userId === userId),
-          likesCount: post.likes.length,
-          commentsCount: post.comments.length,
-        })),
+        posts: formattedPosts,
       });
     } catch (error) {
-      console.error('Error in getUserById:', error);
+      console.error('Get User Error:', error);
       res.status(500).json({
-        error: 'Ошибка сервера',
+        error: 'Ошибка получения данных',
         ...(process.env.NODE_ENV === 'development' && {
           details: error.message,
         }),
@@ -147,44 +275,64 @@ const UserController = {
 
   updateUser: async (req, res) => {
     const { id } = req.params;
+    const userId = req.user.userId;
     const { email, name, dateOfBirth, bio, location } = req.body;
-    const userId = Number(req.user.userId);
 
-    if (Number(id) !== userId) {
-      return res.status(403).json({ error: 'Недостаточно прав' });
+    if (Number(id) !== Number(userId)) {
+      return res.status(403).json({
+        error: 'Доступ запрещен',
+        details: 'Вы можете редактировать только свой профиль',
+      });
     }
 
     try {
       let avatarUrl;
-      const uploadsDir = path.join(__dirname, '../uploads');
+      let oldAvatarKey;
 
-      // Обработка новой аватарки
+      // Если загружен новый файл аватарки
       if (req.file) {
-        const avatarName = `avatar_${name}_${Date.now()}${path.extname(
-          req.file.originalname
-        )}`;
-        const avatarPath = path.join(uploadsDir, avatarName);
+        // Получаем текущего пользователя
+        const currentUser = await prisma.user.findUnique({
+          where: { id: Number(userId) },
+          select: { avatarUrl: true },
+        });
 
-        await fsPromises.writeFile(avatarPath, req.file.buffer);
-        avatarUrl = `/uploads/${avatarName}`;
-
-        // Удаление старой аватарки если она существует
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (user.avatarUrl && user.avatarUrl.startsWith('/uploads/')) {
-          const oldAvatarPath = path.join(
-            uploadsDir,
-            user.avatarUrl.replace('/uploads/', '')
-          );
+        // Удаляем старую аватарку из S3
+        if (currentUser?.avatarUrl) {
           try {
-            await fsPromises.unlink(oldAvatarPath);
-          } catch (err) {
-            console.error('Error deleting old avatar:', err);
+            const url = new URL(currentUser.avatarUrl);
+            oldAvatarKey = url.pathname.substring(1); // Удаляем первый слэш
+            await s3
+              .deleteObject({
+                Bucket: process.env.YC_BUCKET_NAME,
+                Key: oldAvatarKey,
+              })
+              .promise();
+          } catch (error) {
+            console.error('Error deleting old avatar:', error);
           }
         }
+
+        // Загружаем новую аватарку
+        const avatarKey = `avatars/${uuidv4()}${path.extname(
+          req.file.originalname
+        )}`;
+        const uploadResult = await s3
+          .upload({
+            Bucket: process.env.YC_BUCKET_NAME,
+            Key: avatarKey,
+            Body: req.file.buffer,
+            ContentType: req.file.mimetype,
+            ACL: 'public-read',
+          })
+          .promise();
+
+        avatarUrl = uploadResult.Location;
       }
 
-      const user = await prisma.user.update({
-        where: { id: userId },
+      // Обновление данных пользователя
+      const updatedUser = await prisma.user.update({
+        where: { id: Number(userId) },
         data: {
           email: email || undefined,
           name: name || undefined,
@@ -193,13 +341,23 @@ const UserController = {
           bio: bio || undefined,
           location: location || undefined,
         },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          bio: true,
+          location: true,
+          dateOfBirth: true,
+          createdAt: true,
+        },
       });
 
-      res.json(user);
+      res.json(updatedUser);
     } catch (error) {
-      console.error('Error in updateUser:', error);
+      console.error('Update User Error:', error);
       res.status(500).json({
-        error: 'Ошибка сервера',
+        error: 'Ошибка обновления данных',
         ...(process.env.NODE_ENV === 'development' && {
           details: error.message,
         }),
@@ -211,46 +369,85 @@ const UserController = {
     try {
       const user = await prisma.user.findUnique({
         where: { id: Number(req.user.userId) },
-        include: {
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          avatarUrl: true,
+          bio: true,
+          location: true,
+          dateOfBirth: true,
+          createdAt: true,
           followers: {
-            include: {
-              follower: true,
+            select: {
+              id: true,
+              follower: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
             },
           },
           following: {
-            include: {
-              following: true,
+            select: {
+              id: true,
+              following: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
             },
           },
           posts: {
             orderBy: { createdAt: 'desc' },
-            include: {
-              likes: true,
-              comments: true,
+            select: {
+              id: true,
+              content: true,
+              createdAt: true,
+              likes: {
+                select: {
+                  userId: true,
+                },
+              },
+              comments: {
+                select: {
+                  id: true,
+                },
+              },
             },
           },
         },
       });
 
       if (!user) {
-        return res.status(404).json({ error: 'Пользователь не найден' });
+        return res.status(404).json({
+          error: 'Пользователь не найден',
+          details: 'Токен валиден, но пользователь не существует',
+        });
       }
+
+      // Форматирование постов
+      const formattedPosts = user.posts.map((post) => ({
+        ...post,
+        likedByUser: post.likes.some(
+          (like) => like.userId === Number(req.user.userId)
+        ),
+        likesCount: post.likes.length,
+        commentsCount: post.comments.length,
+      }));
 
       res.json({
         ...user,
-        posts: user.posts.map((post) => ({
-          ...post,
-          likedByUser: post.likes.some(
-            (like) => like.userId === Number(req.user.userId)
-          ),
-          likesCount: post.likes.length,
-          commentsCount: post.comments.length,
-        })),
+        posts: formattedPosts,
       });
     } catch (error) {
-      console.error('Error in current:', error);
+      console.error('Current User Error:', error);
       res.status(500).json({
-        error: 'Ошибка сервера',
+        error: 'Ошибка получения данных',
         ...(process.env.NODE_ENV === 'development' && {
           details: error.message,
         }),
