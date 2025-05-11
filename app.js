@@ -69,6 +69,13 @@ app.use('/api', require('./routes'));
 if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads');
 }
+// После создания папки uploads
+if (process.env.NODE_ENV === 'production') {
+  app.use('/uploads', (req, res, next) => {
+    if (!fs.existsSync('uploads')) fs.mkdirSync('uploads');
+    next();
+  });
+}
 
 // Обработка 404
 app.use(function (req, res, next) {

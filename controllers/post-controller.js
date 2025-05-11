@@ -1,4 +1,4 @@
-const { prisma } = require("../prisma/prisma.client");
+const { prisma } = require('../prisma/prisma.client');
 
 const PostController = {
   createPost: async (req, res) => {
@@ -7,7 +7,7 @@ const PostController = {
     const authorId = req.user.userId;
 
     if (!content) {
-      return res.status(400).json({ error: "Каждое поле обязательно" });
+      return res.status(400).json({ error: 'Каждое поле обязательно' });
     }
 
     try {
@@ -21,7 +21,7 @@ const PostController = {
       res.json(post);
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Ошибка сервера" });
+      res.status(500).json({ error: 'Ошибка сервера' });
     }
   },
   getAllPosts: async (req, res) => {
@@ -35,7 +35,7 @@ const PostController = {
           comments: true,
         },
         orderBy: {
-          createdAt: "desc",
+          createdAt: 'desc',
         },
       });
 
@@ -47,40 +47,70 @@ const PostController = {
       res.json(postWithLikeInfo);
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Ошибка сервера" });
+      res.status(500).json({ error: 'Ошибка сервера' });
     }
   },
   getPostById: async (req, res) => {
     const { id } = req.params;
-
     const userId = req.user.userId;
 
     try {
       const post = await prisma.post.findUnique({
-        where: { id },
+        where: { id: Number(id) },
         include: {
           comments: {
             include: {
-              user: true,
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
             },
           },
-          likes: true,
-          author: true,
+          likes: {
+            include: {
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          author: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+            },
+          },
         },
       });
 
       if (!post) {
-        return res.status(404).json({ error: "Пост не найден" });
+        return res.status(404).json({ error: 'Пост не найден' });
       }
 
       const postWithLikeInfo = {
         ...post,
         likedByUser: post.likes.some((like) => like.userId === userId),
+        likesCount: post.likes.length,
+        commentsCount: post.comments.length,
       };
+
       res.json(postWithLikeInfo);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Ошибка сервера" });
+      console.error('Error in getPostById:', error);
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        details:
+          process.env.NODE_ENV === 'development' ? error.message : undefined,
+      });
     }
   },
   deletePost: async (req, res) => {
@@ -90,11 +120,11 @@ const PostController = {
       where: { id },
     });
     if (!post) {
-      return res.status(404).json({ error: "Пост не найден" });
+      return res.status(404).json({ error: 'Пост не найден' });
     }
 
     if (post.authorId !== req.user.userId) {
-      return res.status(403).json({ error: "Нет доступа" });
+      return res.status(403).json({ error: 'Нет доступа' });
     }
 
     try {
@@ -107,7 +137,7 @@ const PostController = {
       res.json(transaction);
     } catch (error) {
       console.error(error);
-      res.status(500).json({ error: "Ошибка сервера" });
+      res.status(500).json({ error: 'Ошибка сервера' });
     }
   },
 };
