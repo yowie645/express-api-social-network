@@ -1,4 +1,4 @@
-const { prisma } = require("../prisma/prisma.client");
+const { prisma } = require('../prisma/prisma.client');
 
 const LikeController = {
   likePost: async (req, res) => {
@@ -7,27 +7,33 @@ const LikeController = {
     const userId = req.user.userId;
 
     if (!postId) {
-      return res.status(400).json({ error: "Все поля обязательны" });
+      return res.status(400).json({ error: 'Все поля обязательны' });
     }
 
     try {
       const existingLike = await prisma.like.findFirst({
-        where: { postId, userId },
+        where: {
+          postId: Number(postId),
+          userId,
+        },
       });
 
       if (existingLike) {
         return res
           .status(400)
-          .json({ error: "Вы уже поставили лайк этому посту" });
+          .json({ error: 'Вы уже поставили лайк этому посту' });
       }
 
       const like = await prisma.like.create({
-        data: { postId, userId },
+        data: {
+          postId: Number(postId),
+          userId,
+        },
       });
 
       res.json(like);
     } catch (error) {
-      res.status(500).json({ error: "Что-то пошло не так" });
+      res.status(500).json({ error: 'Что-то пошло не так' });
     }
   },
 
@@ -39,25 +45,31 @@ const LikeController = {
     if (!id) {
       return res
         .status(400)
-        .json({ error: "Вы уже поставили дизлайк этому посту" });
+        .json({ error: 'Вы уже поставили дизлайк этому посту' });
     }
 
     try {
       const existingLike = await prisma.like.findFirst({
-        where: { postId: id, userId },
+        where: {
+          postId: Number(id),
+          userId,
+        },
       });
 
       if (!existingLike) {
-        return res.status(400).json({ error: "Лайк уже существует" });
+        return res.status(400).json({ error: 'Лайк уже существует' });
       }
 
       const like = await prisma.like.deleteMany({
-        where: { postId: id, userId },
+        where: {
+          postId: Number(id),
+          userId,
+        },
       });
 
       res.json(like);
     } catch (error) {
-      res.status(500).json({ error: "Что-то пошло не так" });
+      res.status(500).json({ error: 'Что-то пошло не так' });
     }
   },
 };

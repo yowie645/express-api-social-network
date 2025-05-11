@@ -76,7 +76,16 @@ if (process.env.NODE_ENV === 'production') {
     next();
   });
 }
-
+app.use(
+  '/uploads',
+  (req, res, next) => {
+    const ext = path.extname(req.path);
+    if (ext === '.png') res.type('image/png');
+    else if (ext === '.jpg' || ext === '.jpeg') res.type('image/jpeg');
+    next();
+  },
+  express.static('uploads')
+);
 // Обработка 404
 app.use(function (req, res, next) {
   next(createError(404, 'Страница не найдена'));
