@@ -69,7 +69,7 @@ const PostController = {
               },
             },
             orderBy: {
-              id: 'desc', // Либо createdAt, если добавили его в модель
+              createdAt: 'desc',
             },
           },
           likes: {
@@ -115,9 +115,10 @@ const PostController = {
   },
   deletePost: async (req, res) => {
     const { id } = req.params;
+    const postId = Number(id);
 
     const post = await prisma.post.findUnique({
-      where: { id },
+      where: { id: postId },
     });
     if (!post) {
       return res.status(404).json({ error: 'Пост не найден' });
