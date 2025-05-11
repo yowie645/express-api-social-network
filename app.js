@@ -13,30 +13,39 @@ app.use(logger('dev'));
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
-/* app.set('view engine', 'jade'); */
-//Раздача стат.файлов из папки uploads
+
+// Раздача статических файлов из папки uploads
 app.use('/uploads', express.static('uploads'));
 
+// Подключение роутов
 app.use('/api', require('./routes'));
 
+// Создание папки uploads, если её нет
 if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads');
-} //проверка нахождения папки, если нет то ее создание
+}
 
-// catch 404 and forward to error handler
+// Обработка 404 ошибки
 app.use(function (req, res, next) {
-  next(createError(404));
+  next(createError(404, 'Страница не найдена'));
 });
 
-// error handler
+// Обработчик ошибок (возвращает JSON вместо рендеринга шаблона)
 app.use(function (err, req, res, next) {
-  // set locals, only providing error in development
-  res.locals.message = err.message;
-  res.locals.error = req.app.get('env') === 'development' ? err : {};
+  // Логирование ошибки для разработки
+  console.error(err.stack || err);
 
-  // render the error page
+  // Устанавливаем статус ошибки
   res.status(err.status || 500);
-  res.render('error');
+
+  // Отправляем JSON с информацией об ошибке
+  res.json({
+    error: {
+      message: err.message,
+      status: err.status || 500,
+      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+    },
+  });
 });
 
 module.exports = app;
