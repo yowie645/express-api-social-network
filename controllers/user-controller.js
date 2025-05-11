@@ -1,10 +1,11 @@
 const { prisma } = require('../prisma/prisma.client');
 const bcrypt = require('bcryptjs');
 const Jdenticon = require('jdenticon');
-const path = require('path');
-const fs = require('fs');
-const fsPromises = fs.promises;
 const jwt = require('jsonwebtoken');
+
+// Константы для оптимизации Base64
+const AVATAR_SIZE = 200; // Размер аватарки в пикселях
+const BASE64_PREFIX = 'data:image/png;base64,';
 
 const UserController = {
   register: async (req, res) => {
@@ -26,17 +27,9 @@ const UserController = {
       // Хеширование пароля
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Создание папки uploads если не существует
-      const uploadsDir = path.join(__dirname, '../uploads');
-      if (!fs.existsSync(uploadsDir)) {
-        await fsPromises.mkdir(uploadsDir, { recursive: true });
-      }
-
-      // Генерация и сохранение аватарки
-      const avatarName = `avatar_${name}_${Date.now()}.png`;
-      const avatarPath = path.join(uploadsDir, avatarName);
-      const pngBuffer = Jdenticon.toPng(`${name}${Date.now()}`, 200);
-      await fsPromises.writeFile(avatarPath, pngBuffer);
+      // Генерация аватарки в Base64
+      const pngBuffer = Jdenticon.toPng(`${name}${Date.now()}`, AVATAR_SIZE);
+      const avatarBase64 = BASE64_PREFIX + pngBuffer.toString('base64');
 
       // Создание пользователя
       const user = await prisma.user.create({
@@ -44,11 +37,13 @@ const UserController = {
           email,
           password: hashedPassword,
           name,
-          avatarUrl: `/uploads/${avatarName}`,
+          avatarUrl: avatarBase64,
         },
       });
 
-      res.json(user);
+      // Не возвращаем пароль в ответе
+      const { password: _, ...userData } = user;
+      res.json(userData);
     } catch (error) {
       console.error('Error in register:', error);
       res.status(500).json({
@@ -82,7 +77,10 @@ const UserController = {
       const token = jwt.sign({ userId: user.id }, process.env.SECRET_KEY, {
         expiresIn: '30d',
       });
-      res.json({ token });
+
+      // Не возвращаем пароль в ответе
+      const { password: _, ...userData } = user;
+      res.json({ ...userData, token });
     } catch (error) {
       console.error('Error in login:', error);
       res.status(500).json({
@@ -101,7 +99,14 @@ const UserController = {
     try {
       const user = await prisma.user.findUnique({
         where: { id: Number(id) },
-        include: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatarUrl: true,
+          bio: true,
+          location: true,
+          dateOfBirth: true,
           followers: true,
           following: true,
           posts: {
@@ -155,43 +160,34 @@ const UserController = {
     }
 
     try {
-      let avatarUrl;
-      const uploadsDir = path.join(__dirname, '../uploads');
+      let avatarBase64;
 
-      // Обработка новой аватарки
+      // Если загружен новый файл аватарки
       if (req.file) {
-        const avatarName = `avatar_${name}_${Date.now()}${path.extname(
-          req.file.originalname
-        )}`;
-        const avatarPath = path.join(uploadsDir, avatarName);
-
-        await fsPromises.writeFile(avatarPath, req.file.buffer);
-        avatarUrl = `/uploads/${avatarName}`;
-
-        // Удаление старой аватарки если она существует
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        if (user.avatarUrl && user.avatarUrl.startsWith('/uploads/')) {
-          const oldAvatarPath = path.join(
-            uploadsDir,
-            user.avatarUrl.replace('/uploads/', '')
-          );
-          try {
-            await fsPromises.unlink(oldAvatarPath);
-          } catch (err) {
-            console.error('Error deleting old avatar:', err);
-          }
-        }
+        const pngBuffer = req.file.buffer;
+        avatarBase64 = BASE64_PREFIX + pngBuffer.toString('base64');
       }
+
+      const updateData = {
+        email: email || undefined,
+        name: name || undefined,
+        dateOfBirth: dateOfBirth || undefined,
+        bio: bio || undefined,
+        location: location || undefined,
+        ...(avatarBase64 && { avatarUrl: avatarBase64 }),
+      };
 
       const user = await prisma.user.update({
         where: { id: userId },
-        data: {
-          email: email || undefined,
-          name: name || undefined,
-          avatarUrl: avatarUrl || undefined,
-          dateOfBirth: dateOfBirth || undefined,
-          bio: bio || undefined,
-          location: location || undefined,
+        data: updateData,
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatarUrl: true,
+          bio: true,
+          location: true,
+          dateOfBirth: true,
         },
       });
 
@@ -211,15 +207,34 @@ const UserController = {
     try {
       const user = await prisma.user.findUnique({
         where: { id: Number(req.user.userId) },
-        include: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          avatarUrl: true,
+          bio: true,
+          location: true,
+          dateOfBirth: true,
           followers: {
             include: {
-              follower: true,
+              follower: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
             },
           },
           following: {
             include: {
-              following: true,
+              following: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
             },
           },
           posts: {
