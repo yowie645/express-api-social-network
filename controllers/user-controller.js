@@ -2,10 +2,7 @@ const { prisma } = require('../prisma/prisma.client');
 const bcrypt = require('bcryptjs');
 const Jdenticon = require('jdenticon');
 const jwt = require('jsonwebtoken');
-
-// Константы для оптимизации Base64
-const AVATAR_SIZE = 200; // Размер аватарки в пикселях
-const BASE64_PREFIX = 'data:image/png;base64,';
+const { Buffer } = require('buffer');
 
 const UserController = {
   register: async (req, res) => {
@@ -27,9 +24,14 @@ const UserController = {
       // Хеширование пароля
       const hashedPassword = await bcrypt.hash(password, 10);
 
-      // Генерация аватарки в Base64
-      const pngBuffer = Jdenticon.toPng(`${name}${Date.now()}`, AVATAR_SIZE);
-      const avatarBase64 = BASE64_PREFIX + pngBuffer.toString('base64');
+      // Генерация SVG аватарки
+      const svgString = Jdenticon.toSvg(name + Date.now(), 200, {
+        backColor: '#FFFFFF',
+        saturation: 0.7,
+      });
+
+      const base64Avatar = Buffer.from(svgString).toString('base64');
+      const avatarUrl = `data:image/svg+xml;base64,${base64Avatar}`;
 
       // Создание пользователя
       const user = await prisma.user.create({
@@ -37,13 +39,20 @@ const UserController = {
           email,
           password: hashedPassword,
           name,
-          avatarUrl: avatarBase64,
+          avatarUrl,
         },
       });
 
-      // Не возвращаем пароль в ответе
-      const { password: _, ...userData } = user;
-      res.json(userData);
+      // Формируем ответ без пароля
+      const userResponse = {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        avatarUrl: user.avatarUrl,
+        createdAt: user.createdAt,
+      };
+
+      res.status(201).json(userResponse);
     } catch (error) {
       console.error('Error in register:', error);
       res.status(500).json({
@@ -66,21 +75,30 @@ const UserController = {
       const user = await prisma.user.findUnique({ where: { email } });
 
       if (!user) {
-        return res.status(400).json({ error: 'Неверный логин или пароль' });
+        return res.status(401).json({ error: 'Неверный email или пароль' });
       }
 
-      const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
-        return res.status(400).json({ error: 'Неверный логин или пароль' });
+      const validPassword = await bcrypt.compare(password, user.password);
+      if (!validPassword) {
+        return res.status(401).json({ error: 'Неверный email или пароль' });
       }
 
-      const token = jwt.sign({ userId: user.id }, process.env.SECRET_KEY, {
-        expiresIn: '30d',
-      });
+      // Генерация JWT токена
+      const token = jwt.sign(
+        { userId: user.id, email: user.email },
+        process.env.SECRET_KEY,
+        { expiresIn: '30d' }
+      );
 
-      // Не возвращаем пароль в ответе
-      const { password: _, ...userData } = user;
-      res.json({ ...userData, token });
+      const userResponse = {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatarUrl,
+        token,
+      };
+
+      res.json(userResponse);
     } catch (error) {
       console.error('Error in login:', error);
       res.status(500).json({
@@ -94,7 +112,7 @@ const UserController = {
 
   getUserById: async (req, res) => {
     const { id } = req.params;
-    const userId = Number(req.user.userId);
+    const userId = req.user.userId;
 
     try {
       const user = await prisma.user.findUnique({
@@ -107,6 +125,7 @@ const UserController = {
           bio: true,
           location: true,
           dateOfBirth: true,
+          createdAt: true,
           followers: true,
           following: true,
           posts: {
@@ -125,20 +144,26 @@ const UserController = {
 
       const isFollowing = await prisma.follows.findFirst({
         where: {
-          AND: [{ followerId: userId }, { followingId: Number(id) }],
+          followerId: Number(userId),
+          followingId: Number(id),
         },
       });
 
-      res.json({
+      const formattedPosts = user.posts.map((post) => ({
+        ...post,
+        likedByUser: post.likes.some((like) => like.userId === Number(userId)),
+        likesCount: post.likes.length,
+        commentsCount: post.comments.length,
+      }));
+
+      // Формируем ответ
+      const response = {
         ...user,
         isFollowing: Boolean(isFollowing),
-        posts: user.posts.map((post) => ({
-          ...post,
-          likedByUser: post.likes.some((like) => like.userId === userId),
-          likesCount: post.likes.length,
-          commentsCount: post.comments.length,
-        })),
-      });
+        posts: formattedPosts,
+      };
+
+      res.json(response);
     } catch (error) {
       console.error('Error in getUserById:', error);
       res.status(500).json({
@@ -153,32 +178,30 @@ const UserController = {
   updateUser: async (req, res) => {
     const { id } = req.params;
     const { email, name, dateOfBirth, bio, location } = req.body;
-    const userId = Number(req.user.userId);
+    const userId = req.user.userId;
 
-    if (Number(id) !== userId) {
+    if (Number(id) !== Number(userId)) {
       return res.status(403).json({ error: 'Недостаточно прав' });
     }
 
     try {
-      let avatarBase64;
-
-      // Если загружен новый файл аватарки
-      if (req.file) {
-        const pngBuffer = req.file.buffer;
-        avatarBase64 = BASE64_PREFIX + pngBuffer.toString('base64');
-      }
-
-      const updateData = {
+      let updateData = {
         email: email || undefined,
         name: name || undefined,
         dateOfBirth: dateOfBirth || undefined,
         bio: bio || undefined,
         location: location || undefined,
-        ...(avatarBase64 && { avatarUrl: avatarBase64 }),
       };
 
-      const user = await prisma.user.update({
-        where: { id: userId },
+      // Если есть новый файл аватарки
+      if (req.file) {
+        const svgString = Jdenticon.toSvg(name + Date.now(), 200);
+        const base64Avatar = Buffer.from(svgString).toString('base64');
+        updateData.avatarUrl = `data:image/svg+xml;base64,${base64Avatar}`;
+      }
+
+      const updatedUser = await prisma.user.update({
+        where: { id: Number(id) },
         data: updateData,
         select: {
           id: true,
@@ -188,10 +211,11 @@ const UserController = {
           bio: true,
           location: true,
           dateOfBirth: true,
+          createdAt: true,
         },
       });
 
-      res.json(user);
+      res.json(updatedUser);
     } catch (error) {
       console.error('Error in updateUser:', error);
       res.status(500).json({
@@ -215,6 +239,7 @@ const UserController = {
           bio: true,
           location: true,
           dateOfBirth: true,
+          createdAt: true,
           followers: {
             include: {
               follower: {
@@ -251,7 +276,8 @@ const UserController = {
         return res.status(404).json({ error: 'Пользователь не найден' });
       }
 
-      res.json({
+      // Форматируем ответ
+      const response = {
         ...user,
         posts: user.posts.map((post) => ({
           ...post,
@@ -261,7 +287,9 @@ const UserController = {
           likesCount: post.likes.length,
           commentsCount: post.comments.length,
         })),
-      });
+      };
+
+      res.json(response);
     } catch (error) {
       console.error('Error in current:', error);
       res.status(500).json({
