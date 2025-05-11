@@ -34,9 +34,7 @@ const PostController = {
           author: true,
           comments: true,
         },
-        orderBy: {
-          createdAt: 'desc',
-        },
+        orderBy: { id: 'desc' },
       });
 
       const postWithLikeInfo = posts.map((post) => ({
@@ -53,11 +51,7 @@ const PostController = {
 
   getPostById: async (req, res) => {
     const { id } = req.params;
-    const userId = req.user.userId;
-
-    if (isNaN(id)) {
-      return res.status(400).json({ error: 'Неверный ID поста' });
-    }
+    const userId = Number(req.user.userId);
 
     try {
       const post = await prisma.post.findUnique({
@@ -65,12 +59,27 @@ const PostController = {
         include: {
           comments: {
             include: {
-              user: { select: { id: true, name: true, avatarUrl: true } },
+              user: {
+                select: {
+                  id: true,
+                  name: true,
+                  avatarUrl: true,
+                },
+              },
             },
-            orderBy: { createdAt: 'desc' },
           },
-          likes: { select: { userId: true } },
-          author: { select: { id: true, name: true, avatarUrl: true } },
+          likes: {
+            select: {
+              userId: true,
+            },
+          },
+          author: {
+            select: {
+              id: true,
+              name: true,
+              avatarUrl: true,
+            },
+          },
         },
       });
 
@@ -80,21 +89,16 @@ const PostController = {
 
       res.json({
         ...post,
-        likedByUser: post.likes.some((like) => like.userId === Number(userId)),
+        likedByUser: post.likes.some((like) => like.userId === userId),
         likesCount: post.likes.length,
         commentsCount: post.comments.length,
       });
     } catch (error) {
-      console.error('Post fetch error:', {
-        postId: id,
-        userId,
-        error: error.message,
-      });
+      console.error('Post fetch error:', error);
       res.status(500).json({
         error: 'Ошибка сервера',
-        ...(process.env.NODE_ENV === 'development' && {
-          details: error.message,
-        }),
+        details:
+          process.env.NODE_ENV === 'development' ? error.message : undefined,
       });
     }
   },
