@@ -8,13 +8,58 @@ const app = express();
 const cors = require('cors');
 require('dotenv').config();
 
-app.use(cors());
+// Логирование запросов
 app.use(logger('dev'));
+
+// Парсинг JSON и URL-encoded данных
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 app.use(cookieParser());
 
-// Раздача статических файлов из папки uploads
+// Настройки CORS
+const allowedOrigins = [
+  'http://localhost:5173',
+  'https://client-social-network-nu.vercel.app',
+  'https://client-social-network-git-main-yowie645.vercel.app',
+  /\.vercel\.app$/, // все поддомены vercel
+];
+
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Разрешить запросы без origin (например, от мобильных приложений или Postman)
+    if (!origin) return callback(null, true);
+
+    // Проверяем соответствие origin списку разрешенных
+    if (
+      allowedOrigins.some((allowedOrigin) =>
+        typeof allowedOrigin === 'string'
+          ? origin === allowedOrigin
+          : allowedOrigin.test(origin)
+      )
+    ) {
+      return callback(null, true);
+    }
+
+    callback(new Error('Not allowed by CORS'));
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: [
+    'Content-Type',
+    'Authorization',
+    'X-Requested-With',
+    'Accept',
+  ],
+  optionsSuccessStatus: 204,
+};
+
+// Применяем CORS ко всем маршрутам
+app.use(cors(corsOptions));
+
+// Разрешаем preflight-запросы
+app.options('*', cors(corsOptions));
+
+// Раздача статических файлов
 app.use('/uploads', express.static('uploads'));
 
 // Подключение роутов
@@ -25,25 +70,20 @@ if (!fs.existsSync('uploads')) {
   fs.mkdirSync('uploads');
 }
 
-// Обработка 404 ошибки
+// Обработка 404
 app.use(function (req, res, next) {
   next(createError(404, 'Страница не найдена'));
 });
 
-// Обработчик ошибок (возвращает JSON вместо рендеринга шаблона)
+// Обработчик ошибок
 app.use(function (err, req, res, next) {
-  // Логирование ошибки для разработки
   console.error(err.stack || err);
 
-  // Устанавливаем статус ошибки
-  res.status(err.status || 500);
-
-  // Отправляем JSON с информацией об ошибке
-  res.json({
+  res.status(err.status || 500).json({
     error: {
       message: err.message,
       status: err.status || 500,
-      stack: process.env.NODE_ENV === 'development' ? err.stack : undefined,
+      ...(process.env.NODE_ENV === 'development' && { stack: err.stack }),
     },
   });
 });
