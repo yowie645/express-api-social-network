@@ -40,7 +40,6 @@ app.get('/', (req, res) => {
   res.json({
     name: 'Social Network API',
     version: '1.0.0',
-    documentation: '/api-docs', // Можно добавить Swagger позже
     endpoints: {
       auth: '/api/auth',
       posts: '/api/posts',
@@ -61,7 +60,8 @@ if (!fs.existsSync('uploads')) {
 }
 
 // Основные API маршруты
-app.use('/api', require('./routes'));
+const apiRouter = require('./routes');
+app.use('/api', apiRouter);
 
 // Обработка 404 ошибки
 app.use((req, res, next) => {
