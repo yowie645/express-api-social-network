@@ -69,7 +69,7 @@ const PostController = {
               },
             },
             orderBy: {
-              createdAt: 'desc',
+              id: 'desc', // Либо createdAt, если добавили его в модель
             },
           },
           likes: {
