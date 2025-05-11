@@ -1,5 +1,4 @@
-const { request } = require("express");
-const { prisma } = require("../prisma/prisma.client");
+const { prisma } = require('../prisma/prisma.client');
 
 const CommentController = {
   createComment: async (req, res) => {
@@ -7,48 +6,69 @@ const CommentController = {
     const userId = req.user.userId;
 
     if (!postId || !content) {
-      return res.status(400).json({ error: "Каждое поле обязательно" });
+      return res.status(400).json({ error: 'Все поля обязательны' });
     }
 
     try {
+      // проверка, существует ли пост
+      const post = await prisma.post.findUnique({
+        where: { id: Number(postId) },
+      });
+
+      if (!post) {
+        return res.status(404).json({ error: 'Пост не найден' });
+      }
+
       const comment = await prisma.comment.create({
         data: {
-          postId,
-          userId,
+          postId: Number(postId),
+          userId: Number(userId),
           content,
         },
       });
 
       res.json(comment);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Ошибка сервера" });
+      console.error('Error in createComment:', error);
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        details:
+          process.env.NODE_ENV === 'development' ? error.message : undefined,
+      });
     }
   },
+
   deleteComment: async (req, res) => {
     const { id } = req.params;
     const userId = req.user.userId;
 
     try {
       const comment = await prisma.comment.findUnique({
-        where: { id },
+        where: { id: Number(id) },
       });
 
       if (!comment) {
-        return res.status(404).json({ error: "Комментарий не найден" });
+        return res.status(404).json({ error: 'Комментарий не найден' });
       }
 
-      if (comment.userId !== userId) {
-        return res
-          .status(403)
-          .json({ error: "Вы не можете удалить этот комментарий" });
+      if (comment.userId !== Number(userId)) {
+        return res.status(403).json({
+          error: 'Нет прав для удаления этого комментария',
+        });
       }
 
-      await prisma.comment.delete({ where: { id } });
+      await prisma.comment.delete({
+        where: { id: Number(id) },
+      });
+
       res.json(comment);
     } catch (error) {
-      console.error(error);
-      res.status(500).json({ error: "Ошибка сервера" });
+      console.error('Error in deleteComment:', error);
+      res.status(500).json({
+        error: 'Ошибка сервера',
+        details:
+          process.env.NODE_ENV === 'development' ? error.message : undefined,
+      });
     }
   },
 };
