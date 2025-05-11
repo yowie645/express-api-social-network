@@ -50,9 +50,14 @@ const PostController = {
       res.status(500).json({ error: 'Ошибка сервера' });
     }
   },
+
   getPostById: async (req, res) => {
     const { id } = req.params;
-    const userId = Number(req.user.userId);
+    const userId = req.user.userId;
+
+    if (isNaN(id)) {
+      return res.status(400).json({ error: 'Неверный ID поста' });
+    }
 
     try {
       const post = await prisma.post.findUnique({
@@ -60,35 +65,12 @@ const PostController = {
         include: {
           comments: {
             include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                  avatarUrl: true,
-                },
-              },
+              user: { select: { id: true, name: true, avatarUrl: true } },
             },
-            orderBy: {
-              createdAt: 'desc',
-            },
+            orderBy: { createdAt: 'desc' },
           },
-          likes: {
-            include: {
-              user: {
-                select: {
-                  id: true,
-                  name: true,
-                },
-              },
-            },
-          },
-          author: {
-            select: {
-              id: true,
-              name: true,
-              avatarUrl: true,
-            },
-          },
+          likes: { select: { userId: true } },
+          author: { select: { id: true, name: true, avatarUrl: true } },
         },
       });
 
@@ -96,20 +78,23 @@ const PostController = {
         return res.status(404).json({ error: 'Пост не найден' });
       }
 
-      const postWithLikeInfo = {
+      res.json({
         ...post,
-        likedByUser: post.likes.some((like) => like.userId === userId),
+        likedByUser: post.likes.some((like) => like.userId === Number(userId)),
         likesCount: post.likes.length,
         commentsCount: post.comments.length,
-      };
-
-      res.json(postWithLikeInfo);
+      });
     } catch (error) {
-      console.error('Error in getPostById:', error);
+      console.error('Post fetch error:', {
+        postId: id,
+        userId,
+        error: error.message,
+      });
       res.status(500).json({
         error: 'Ошибка сервера',
-        details:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error.message,
+        }),
       });
     }
   },

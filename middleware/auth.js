@@ -1,22 +1,35 @@
-const jwt = require("jsonwebtoken");
+const jwt = require('jsonwebtoken');
 
 const authenticateToken = (req, res, next) => {
-  // Полчуить токен из заголовка Authorization
-  const authHeader = req.headers["authorization"];
-  const token = authHeader && authHeader.split(" ")[1];
+  // Получаем токен из заголовка Authorization
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
-  // Проверям, есть ли токен
   if (!token) {
-    return res.status(401).json({ error: "Unauthorized" });
+    return res.status(401).json({ error: 'Токен отсутствует' });
   }
 
-  // Проверяем токен
-  jwt.verify(token, process.env.SECRET_KEY, (err, user) => {
+  jwt.verify(token, process.env.SECRET_KEY, (err, decoded) => {
     if (err) {
-      return res.status(403).json({ error: "Invalid token" });
+      console.error('Ошибка верификации токена:', err.message);
+      return res.status(403).json({
+        error: 'Недействительный токен',
+        ...(process.env.NODE_ENV === 'development' && { details: err.message }),
+      });
     }
 
-    req.user = user;
+    const userId = Number(decoded.userId);
+    if (isNaN(userId)) {
+      return res
+        .status(403)
+        .json({ error: 'Некорректный ID пользователя в токене' });
+    }
+
+    req.user = {
+      userId: userId,
+      ...(decoded.email && { email: decoded.email }),
+      ...(decoded.name && { name: decoded.name }),
+    };
 
     next();
   });
