@@ -10,6 +10,19 @@ const {
 } = require('../controllers');
 const { authenticateToken } = require('../middleware/auth');
 
+// Проверка, что контроллеры существуют
+if (
+  !UserController ||
+  !PostController ||
+  !CommentController ||
+  !LikeController ||
+  !FollowController
+) {
+  throw new Error(
+    'Один или несколько контроллеров не были корректно импортированы'
+  );
+}
+
 // Роуты пользователя
 router.post('/register', UserController.register);
 router.post('/login', UserController.login);
