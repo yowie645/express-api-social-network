@@ -1,4 +1,3 @@
-// CommentController.js
 const { prisma } = require('../prisma/prisma.client');
 
 const CommentController = {
@@ -7,18 +6,32 @@ const CommentController = {
     const userId = req.user.userId;
 
     if (!postId || !content) {
-      return res.status(400).json({ error: 'Все поля обязательны' });
+      return res.status(400).json({
+        error: 'Все поля обязательны',
+        details: {
+          missing: {
+            postId: !postId,
+            content: !content,
+          },
+        },
+      });
     }
 
     try {
-      const post = await prisma.post.findUnique({
+      // Проверяем существование поста
+      const postExists = await prisma.post.findUnique({
         where: { id: Number(postId) },
+        select: { id: true },
       });
 
-      if (!post) {
-        return res.status(404).json({ error: 'Пост не найден' });
+      if (!postExists) {
+        return res.status(404).json({
+          error: 'Пост не найден',
+          suggestion: 'Проверьте ID поста',
+        });
       }
 
+      // Создаем комментарий
       const comment = await prisma.comment.create({
         data: {
           postId: Number(postId),
@@ -36,13 +49,21 @@ const CommentController = {
         },
       });
 
-      res.json(comment);
+      res.status(201).json(comment);
     } catch (error) {
-      console.error('Error in createComment:', error);
+      console.error('Create Comment Error:', {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+        userId,
+        postId,
+      });
+
       res.status(500).json({
-        error: 'Ошибка сервера',
-        details:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
+        error: 'Ошибка при создании комментария',
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error.message,
+        }),
       });
     }
   },
@@ -52,31 +73,66 @@ const CommentController = {
     const userId = Number(req.user.userId);
 
     try {
+      // Находим комментарий с информацией о посте и авторе
       const comment = await prisma.comment.findUnique({
         where: { id: Number(id) },
+        include: {
+          post: {
+            select: {
+              userId: true,
+            },
+          },
+          user: {
+            select: {
+              id: true,
+            },
+          },
+        },
       });
 
       if (!comment) {
-        return res.status(404).json({ error: 'Комментарий не найден' });
-      }
-
-      if (comment.userId !== userId) {
-        return res.status(403).json({
-          error: 'Нет прав для удаления этого комментария',
+        return res.status(404).json({
+          error: 'Комментарий не найден',
+          suggestion: 'Проверьте ID комментария',
         });
       }
 
+      // Проверяем права: автор комментария или автор поста
+      const isCommentAuthor = comment.user.id === userId;
+      const isPostAuthor = comment.post.userId === userId;
+
+      if (!isCommentAuthor && !isPostAuthor) {
+        return res.status(403).json({
+          error: 'Недостаточно прав для удаления',
+          details:
+            'Вы можете удалять только свои комментарии или комментарии к своим постам',
+        });
+      }
+
+      // Удаляем комментарий
       await prisma.comment.delete({
         where: { id: Number(id) },
       });
 
-      res.json(comment);
+      res.json({
+        success: true,
+        message: 'Комментарий успешно удален',
+        deletedCommentId: id,
+      });
     } catch (error) {
-      console.error('Error in deleteComment:', error);
+      console.error('Delete Comment Error:', {
+        message: error.message,
+        stack: error.stack,
+        timestamp: new Date().toISOString(),
+        userId,
+        commentId: id,
+      });
+
       res.status(500).json({
-        error: 'Ошибка сервера',
-        details:
-          process.env.NODE_ENV === 'development' ? error.message : undefined,
+        error: 'Ошибка при удалении комментария',
+        ...(process.env.NODE_ENV === 'development' && {
+          details: error.message,
+        }),
       });
     }
   },
