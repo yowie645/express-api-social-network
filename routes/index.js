@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const upload = require('../middleware/upload');
+const {
   UserController,
   PostController,
   CommentController,
@@ -29,7 +30,11 @@ router.delete('/posts/:id', authenticateToken, PostController.deletePost);
 
 // Роуты комментариев
 router.post('/comments', authenticateToken, CommentController.createComment);
-router.delete('/comments/:id', authenticateToken, CommentController.deleteComment);
+router.delete(
+  '/comments/:id',
+  authenticateToken,
+  CommentController.deleteComment
+);
 
 // Роуты лайков
 router.post('/likes', authenticateToken, LikeController.likePost);
@@ -37,6 +42,10 @@ router.delete('/likes/:id', authenticateToken, LikeController.unlikePost);
 
 // Роуты подписок
 router.post('/follow', authenticateToken, FollowController.followUser);
-router.delete('/unfollow/:id', authenticateToken, FollowController.unfollowUser);
+router.delete(
+  '/unfollow/:id',
+  authenticateToken,
+  FollowController.unfollowUser
+);
 
 module.exports = router;
