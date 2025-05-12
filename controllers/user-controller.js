@@ -4,6 +4,7 @@ const Jdenticon = require('jdenticon');
 const jwt = require('jsonwebtoken');
 const AWS = require('aws-sdk');
 const { v4: uuidv4 } = require('uuid');
+const path = require('path');
 
 // Настройка S3 клиента для Yandex Cloud
 const s3 = new AWS.S3({
@@ -29,7 +30,6 @@ const UserController = {
     }
 
     try {
-      // Проверка существующего пользователя
       const existingUser = await prisma.user.findUnique({
         where: { email },
         select: { id: true },
@@ -42,7 +42,6 @@ const UserController = {
         });
       }
 
-      // Хеширование пароля
       const hashedPassword = await bcrypt.hash(password, 10);
 
       // Генерация аватарки
@@ -60,7 +59,6 @@ const UserController = {
         })
         .promise();
 
-      // Создание пользователя
       const user = await prisma.user.create({
         data: {
           email,
@@ -79,12 +77,7 @@ const UserController = {
 
       res.status(201).json(user);
     } catch (error) {
-      console.error('Registration Error:', {
-        message: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString(),
-      });
-
+      console.error('Registration Error:', error);
       res.status(500).json({
         error: 'Ошибка при регистрации',
         ...(process.env.NODE_ENV === 'development' && {
@@ -134,22 +127,14 @@ const UserController = {
         });
       }
 
-      // Генерация JWT токена
       const token = jwt.sign(
-        {
-          userId: user.id,
-          email: user.email,
-        },
+        { userId: user.id, email: user.email },
         process.env.SECRET_KEY,
         { expiresIn: '30d' }
       );
 
-      // Формируем ответ без пароля
       const { password: _, ...userData } = user;
-      res.json({
-        ...userData,
-        token,
-      });
+      res.json({ ...userData, token });
     } catch (error) {
       console.error('Login Error:', error);
       res.status(500).json({
@@ -236,7 +221,6 @@ const UserController = {
         });
       }
 
-      // Проверка подписки
       const isFollowing = userId
         ? await prisma.follows.findFirst({
             where: {
@@ -247,7 +231,6 @@ const UserController = {
           })
         : false;
 
-      // Форматирование постов
       const formattedPosts = user.posts.map((post) => ({
         ...post,
         likedByUser: userId
@@ -287,9 +270,8 @@ const UserController = {
 
     try {
       let avatarUrl;
-      let oldAvatarKey;
 
-      // Если загружен новый файл аватарки
+      // Обработка новой аватарки
       if (req.file) {
         // Получаем текущего пользователя
         const currentUser = await prisma.user.findUnique({
@@ -297,11 +279,11 @@ const UserController = {
           select: { avatarUrl: true },
         });
 
-        // Удаляем старую аватарку из S3
+        // Удаляем старую аватарку из Yandex Cloud
         if (currentUser?.avatarUrl) {
           try {
             const url = new URL(currentUser.avatarUrl);
-            oldAvatarKey = url.pathname.substring(1); // Удаляем первый слэш
+            const oldAvatarKey = url.pathname.substring(1);
             await s3
               .deleteObject({
                 Bucket: process.env.YC_BUCKET_NAME,
@@ -314,9 +296,9 @@ const UserController = {
         }
 
         // Загружаем новую аватарку
-        const avatarKey = `avatars/${uuidv4()}${path.extname(
-          req.file.originalname
-        )}`;
+        const fileExtension = path.extname(req.file.originalname);
+        const avatarKey = `avatars/${uuidv4()}${fileExtension}`;
+
         const uploadResult = await s3
           .upload({
             Bucket: process.env.YC_BUCKET_NAME,
@@ -330,13 +312,13 @@ const UserController = {
         avatarUrl = uploadResult.Location;
       }
 
-      // Обновление данных пользователя
+      // Обновляем данные пользователя
       const updatedUser = await prisma.user.update({
         where: { id: Number(userId) },
         data: {
           email: email || undefined,
           name: name || undefined,
-          avatarUrl: avatarUrl || undefined,
+          ...(avatarUrl && { avatarUrl }),
           dateOfBirth: dateOfBirth || undefined,
           bio: bio || undefined,
           location: location || undefined,
@@ -430,7 +412,6 @@ const UserController = {
         });
       }
 
-      // Форматирование постов
       const formattedPosts = user.posts.map((post) => ({
         ...post,
         likedByUser: post.likes.some(
