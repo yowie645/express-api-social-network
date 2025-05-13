@@ -18,11 +18,10 @@ This is the server part of a social network written in Node.js using Express. Th
 
 ### ✨ Key Features
 
-- **User Profiles:** View and edit your profile with ease.
-- **News Feed:** Stay updated with the latest posts from your network.
-- **Reactions & Comments:** Like posts and join discussions.
-- **Avatar & Cover Updates:** Easily change your profile and cover images.
-- **Followers & Subscriptions:** Track who follows you and manage your subscriptions.
+- **User Authentication:** Secure registration and login with JWT (JSON Web Tokens).
+- **Cloud storage:** Secure file storage with support for media uploads (images). Files are hosted on scalable cloud platforms, ensuring fast access and reliability.
+- **Database:** Powered by PostgreSQL for flexible data management, enabling efficient handling of user profiles, posts, comments, and relationships. Features indexing for optimized queries and scalability.
+- **API Documentation**: Well-structured API endpoints with examples for easy integration.
 
 ## 📄 API Documentation
 
@@ -44,21 +43,28 @@ This is the server part of a social network written in Node.js using Express. Th
 | `POST`   | `/follow`      | `{"followingId": number}`                                                                                          | Follow on user ✅      |
 | `DELETE` | `/unfollow:id` | `:id(user id)`                                                                                                     | Unfollow on user ✅    |
 
+### 🌈.ENV
+
+- **DATABASE_URL**= DATABASE_URL
+
+- **SECRET_KEY** = SECRET_KEY
+
+- **YC_ACCESS_KEY_ID**=YC_ACCESS_KEY_ID
+
+- **YC_SECRET_ACCESS_KEY**=YC_SECRET_ACCESS_KEY
+
+- **YC_BUCKET_NAME**=YC_BUCKET_NAME
+
 ## 📸 Screenshots
 
 ### 🖼️ Interface
 
-![1](screenshots/11.jpg)
-![2](screenshots/10.jpg)
-![3](screenshots/9.jpg)
-![4](screenshots/8.jpg)
-![5](screenshots/7.jpg)
-![5](screenshots/6.jpg)
-![5](screenshots/5.jpg)
-![5](screenshots/4.jpg)
-![5](screenshots/3.jpg)
-![5](screenshots/2.jpg)
-![5](screenshots/1.jpg)
+![1](screenshots/1.jpg)
+_Yandex cloud was used for storage._
+![2](screenshots/2.jpg)
+_A database created on postgresql in the render service_
+![3](screenshots/3.jpg)
+_The API storage server is also created on render_
 
 ---
 
