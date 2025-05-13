@@ -2,13 +2,17 @@
 
 <h1 align="center">💫 About Project:</h1>
 
-## 🧸 ClientSocialNetwork — Your Gateway to a Custom Social Network
+## 🧸 ExpressClientSocialNetwork — Backend API
 
-ClientSocialNetwork is a sleek, modern client application for a social network, built with **React** and **TypeScript**. Designed for seamless interaction, it lets you connect with friends, share posts, and engage in real-time communication—all through an intuitive and responsive interface.
+This is the server part of a social network written in Node.js using Express. The API provides functionality for registration, authentication, user profile management, publications, and subscriptions.
+
+## Base URL
+
+- http://localhost:3000/api
 
 ## 💻 Tech Stack:
 
-![TypeScript](https://img.shields.io/badge/typescript-%23007ACC.svg?style=for-the-badge&logo=typescript&logoColor=white) ![Vite](https://img.shields.io/badge/vite-%23646CFF.svg?style=for-the-badge&logo=vite&logoColor=white) ![React](https://img.shields.io/badge/react-%2320232a.svg?style=for-the-badge&logo=react&logoColor=%2361DAFB)
+![Express.js](https://img.shields.io/badge/express.js-%23404d59.svg?style=for-the-badge&logo=express&logoColor=%2361DAFB) ![Postgres](https://img.shields.io/badge/postgres-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white) ![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white) ![Prisma](https://img.shields.io/badge/Prisma-3982CE?style=for-the-badge&logo=Prisma&logoColor=white)
 
 - **This is the frontend repository the backend for this repository is located here - https://github.com/yowie645/express-api-social-network**
 
@@ -19,6 +23,13 @@ ClientSocialNetwork is a sleek, modern client application for a social network, 
 - **Reactions & Comments:** Like posts and join discussions.
 - **Avatar & Cover Updates:** Easily change your profile and cover images.
 - **Followers & Subscriptions:** Track who follows you and manage your subscriptions.
+
+### 📄 API Documentation
+
+| Заголовок 1 | Заголовок 2     | Заголовок 3                           | Requires Auth |
+| ----------- | --------------- | ------------------------------------- | ------------- |
+| `POST`      | `/url`          | _Create short URL from original link_ | ✅ **Yes**    |
+| `GET`       | `/{your_alias}` | _Redirect to original UR_             | ❌ **No**     |
 
 ## 📸 Screenshots
 
