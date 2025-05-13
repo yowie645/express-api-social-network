@@ -28,17 +28,10 @@ This is the server part of a social network written in Node.js using Express. Th
 
 # API Documentation
 
-| Method | Endpoint  | Request Body (JSON)  | Description         | Auth |
-| ------ | --------- | -------------------- | ------------------- | ---- |
-| POST   | /register | {                    | User registration   | ❌   |
-|        |           | "email": "string",   |                     |      |
-|        |           | "name": "string",    |                     |      |
-|        |           | "password": "string" |                     |      |
-|        |           | }                    |                     |      |
-| POST   | /login    | {                    | User authentication | ❌   |
-|        |           | "email": "string",   |                     |      |
-|        |           | "password": "string" |                     |      |
-|        |           | }                    |                     |      |
+| Method | Endpoint    | Request Body (JSON)                                                                       | Description         | Auth |
+| ------ | ----------- | ----------------------------------------------------------------------------------------- | ------------------- | ---- |
+| `POST` | `/register` | `json<br>{<br>  "email": "string",<br>  "name": "string",<br>  "password": "string"<br>}` | User registration   | ❌   |
+| `POST` | `/login`    | `json<br>{<br>  "email": "string",<br>  "password": "string"<br>}`                        | User authentication | ❌   |
 
 ## 📸 Screenshots
 
