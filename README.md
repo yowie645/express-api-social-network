@@ -26,10 +26,10 @@ This is the server part of a social network written in Node.js using Express. Th
 
 ### 📄 API Documentation
 
-| Заголовок 1 | Заголовок 2     | Заголовок 3                           | Requires Auth |
-| ----------- | --------------- | ------------------------------------- | ------------- |
-| `POST`      | `/url`          | _Create short URL from original link_ | ✅ **Yes**    |
-| `GET`       | `/{your_alias}` | _Redirect to original UR_             | ❌ **No**     |
+| Method | Endpoint    | Request Body (JSON)                                           | Description            | Auth 🔐 |
+| ------ | ----------- | ------------------------------------------------------------- | ---------------------- | ------- |
+| `POST` | `/register` | `{"email": "string", "name": "string", "password": "string"}` | 👤 User registration   | ❌      |
+| `POST` | `/login`    | `{"email": "string", "password": "string"}`                   | 🔑 User authentication | ❌      |
 
 ## 📸 Screenshots
 
