@@ -40,9 +40,9 @@ This is the server part of a social network written in Node.js using Express. Th
 | `POST`   | `/comments`    | `{"postId": number, "userId": number}, "content": "string"}`                                                       | Create comment ✅      |
 | `DELETE` | `/comments:id` | Not required                                                                                                       | Delete comment ✅      |
 | `POST`   | `/likes`       | `{"postId": number, "userId": number}`                                                                             | Create like ✅         |
-| `DELETE` | `/likes:id`    | :id(post id)                                                                                                       | Delete like ✅         |
+| `DELETE` | `/likes:id`    | `:id(post id)`                                                                                                     | Delete like ✅         |
 | `POST`   | `/follow`      | `{"followingId": number}`                                                                                          | Follow on user ✅      |
-| `DELETE` | `/unfollow:id` | :id(user id)                                                                                                       | Unfollow on user ✅    |
+| `DELETE` | `/unfollow:id` | `:id(user id)`                                                                                                     | Unfollow on user ✅    |
 
 ## 📸 Screenshots
 
