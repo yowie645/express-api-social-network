@@ -34,7 +34,7 @@ This is the server part of a social network written in Node.js using Express. Th
 | `POST` | `/login` ❌    | `{"email":"string","password":"string"}`                                                                                                  | User authentication |
 | `GET`  | `/current` ✅  | Not required                                                                                                                              | Data current user   |
 | `POST` | `/users:id` ✅ | Not required                                                                                                                              | Data User           |
-| `PUT`  | `/users:id` ✅ | `{"email": "string", "name": "string", "avatarUrl": "string"}, "bio": null`, "location": null, "dateOfBirth": null, "createdAt": "string" | Put data User       |
+| `PUT`  | `/users:id` ✅ | `{"email": "string", "name": "string", "avatarUrl": "string"}, "bio": null, "location": null, "dateOfBirth": null, "createdAt": "string"` | Put data User       |
 
 ## 📸 Screenshots
 
