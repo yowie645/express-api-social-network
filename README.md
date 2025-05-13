@@ -26,23 +26,23 @@ This is the server part of a social network written in Node.js using Express. Th
 
 ## 📄 API Documentation
 
-| Method   | Endpoint(Auth)    | Request Body (JSON)                                                                                                | Description         |
-| -------- | ----------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------- |
-| `POST`   | `/register` ❌    | `{"email":"string","name":"string","password":"string"}`                                                           | Create user         |
-| `POST`   | `/login` ❌       | `{"email":"string","password":"string"}`                                                                           | Authentication user |
-| `GET`    | `/current` ✅     | Not required                                                                                                       | Data current user   |
-| `POST`   | `/users:id` ✅    | Not required                                                                                                       | Data User           |
-| `PUT`    | `/users:id` ✅    | `{"email": "string", "name": "string", "avatarUrl": "string", "bio": null, "location": null, "dateOfBirth": null}` | Put data User       |
-| `POST`   | `/posts` ✅       | `{"content": "string", "authorId": number}`                                                                        | Create posts        |
-| `GET`    | `/posts` ✅       | Not required                                                                                                       | Get post            |
-| `GET`    | `/posts:id` ✅    | Not required                                                                                                       | Get post by id      |
-| `DELETE` | `/posts:id` ✅    | Not required                                                                                                       | Delete post by id   |
-| `POST`   | `/comments` ✅    | `{"postId": number, "userId": number}, "content": "string"}`                                                       | Create comment      |
-| `DELETE` | `/comments:id` ✅ | Not required                                                                                                       | Delete comment      |
-| `POST`   | `/likes` ✅       | `{"postId": number, "userId": number}`                                                                             | Create like         |
-| `DELETE` | `/likes:id` ✅    | :id(post id)                                                                                                       | Delete like         |
-| `POST`   | `/follow` ✅      | `{"followingId": number}`                                                                                          | Follow on user      |
-| `DELETE` | `/unfollow:id` ✅ | :id(user id)                                                                                                       | Unfollow on user    |
+| Method   | Endpoint       | Request Body (JSON)                                                                                                | Description / Auth     |
+| -------- | -------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------- |
+| `POST`   | `/register`    | `{"email":"string","name":"string","password":"string"}`                                                           | Create user ❌         |
+| `POST`   | `/login`       | `{"email":"string","password":"string"}`                                                                           | Authentication user ❌ |
+| `GET`    | `/current`     | Not required                                                                                                       | Data current user ✅   |
+| `POST`   | `/users:id`    | Not required                                                                                                       | Data User ✅           |
+| `PUT`    | `/users:id`    | `{"email": "string", "name": "string", "avatarUrl": "string", "bio": null, "location": null, "dateOfBirth": null}` | Put data User ✅       |
+| `POST`   | `/posts`       | `{"content": "string", "authorId": number}`                                                                        | Create posts ✅        |
+| `GET`    | `/posts`       | Not required                                                                                                       | Get post ✅            |
+| `GET`    | `/posts:id`    | Not required                                                                                                       | Get post by id ✅      |
+| `DELETE` | `/posts:id`    | Not required                                                                                                       | Delete post by id ✅   |
+| `POST`   | `/comments`    | `{"postId": number, "userId": number}, "content": "string"}`                                                       | Create comment ✅      |
+| `DELETE` | `/comments:id` | Not required                                                                                                       | Delete comment ✅      |
+| `POST`   | `/likes`       | `{"postId": number, "userId": number}`                                                                             | Create like ✅         |
+| `DELETE` | `/likes:id`    | :id(post id)                                                                                                       | Delete like ✅         |
+| `POST`   | `/follow`      | `{"followingId": number}`                                                                                          | Follow on user ✅      |
+| `DELETE` | `/unfollow:id` | :id(user id)                                                                                                       | Unfollow on user ✅    |
 
 ## 📸 Screenshots
 
