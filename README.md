@@ -72,25 +72,18 @@ _The API storage server is also created on render_
 
 ### Prerequisites
 
-- Uses [Vite](https://vitejs.dev/), [Vitest](https://vitest.dev/), and [React Testing Library](https://github.com/testing-library/react-testing-library) to create a modern [React](https://react.dev/) app compatible with [Create React App](https://create-react-app.dev/)
+- Docker
 - Node.js
 
 ## 🪭 Quick Setup
 
 ### Clone repository
 
-- git clone https://github.com/yowie645/client-social-network.git
+- git clone https://github.com/yowie645/express-api-social-network.git
 - cd client-social-network
 
 ## Scripts
 
-- `dev`/`start` - start dev server and open browser
-- `build` - build for production
-- `preview` - locally preview production build
-- `test` - launch test runner
-
-### Run
-
-- npm run dev
+- `dev`/`start` - start dev server
 
 <img src="screenshots/prev.jpg" width="100%" height="200px" alt="Preview">
