@@ -26,6 +26,8 @@ This is the server part of a social network written in Node.js using Express. Th
 
 ### 📄 API Documentation
 
+# API Documentation
+
 | Method | Endpoint    | Request Body (JSON)                                           | Description         | Auth |
 | ------ | ----------- | ------------------------------------------------------------- | ------------------- | ---- |
 | `POST` | `/register` | `{"email": "string", "name": "string", "password": "string"}` | User registration   | ❌   |
